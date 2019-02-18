@@ -1,0 +1,21 @@
+# General
+
+# MacOS
+.DS_Store
+
+# Truffle
+node_modules
+logs
+*.log
+coverage
+shippable
+config/development/contracts.json
+config/development/*.sol.js
+config/test/contracts.json
+build
+dist
+package-lock.json
+
+# Confidential files
+.walletsecret
+.infurakey
