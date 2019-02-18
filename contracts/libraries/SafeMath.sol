@@ -1,7 +1,13 @@
 pragma solidity ^0.4.25;
 
-// from: https://github.com/OpenZeppelin/openzeppelin-solidity/blob/master/contracts/math/SafeMath.sol
+/**
+ * @title SafeMath
+ * @dev Math operations with safety checks that revert on error
+ */
 library SafeMath {
+    /**
+    * @dev Multiplies two unsigned integers, reverts on overflow.
+    */
     function mul(uint256 a, uint256 b) internal pure returns (uint256) {
         if (a == 0) {
             return 0;
@@ -13,6 +19,9 @@ library SafeMath {
         return c;
     }
 
+    /**
+    * @dev Integer division of two unsigned integers truncating the quotient, reverts on division by zero.
+    */
     function div(uint256 a, uint256 b) internal pure returns (uint256) {
         require(b > 0, "Can't divide by zero");
         uint256 c = a / b;
@@ -20,6 +29,9 @@ library SafeMath {
         return c;
     }
 
+    /**
+    * @dev Subtracts two unsigned integers, reverts on overflow (i.e. if subtrahend is greater than minuend).
+    */
     function sub(uint256 a, uint256 b) internal pure returns (uint256) {
         require(b <= a, "Can't subtract a number from a smaller one with uints");
         uint256 c = a - b;
@@ -27,6 +39,9 @@ library SafeMath {
         return c;
     }
 
+    /**
+    * @dev Adds two unsigned integers, reverts on overflow.
+    */
     function add(uint256 a, uint256 b) internal pure returns (uint256) {
         uint256 c = a + b;
         require(c >= a, "Result has to be bigger than both summands");
@@ -34,11 +49,18 @@ library SafeMath {
         return c;
     }
 
+    /**
+    * @dev Divides two unsigned integers and returns the remainder (unsigned integer modulo),
+    * reverts when dividing by zero.
+    */
     function mod(uint256 a, uint256 b) internal pure returns (uint256) {
         require(b != 0, "Can't perform modulo with zero");
         return a % b;
     }
 
+    /**
+    * @dev Extracts the root of a unisigned integer, reverts on overflow.
+    */
     function sqrt(uint256 a) public pure returns (uint256) {
         if (a == 0) return 0;
 

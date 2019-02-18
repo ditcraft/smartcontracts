@@ -2,6 +2,14 @@ pragma solidity ^0.4.25;
 
 import "./libraries/SafeMath.sol";
 
+/**
+ * @title Knowledge-Token
+ *
+ * @dev Implementation of the knowledge token that is being used for knowledge-extractable voting
+ * This implementation has the additional functionality of mapping an address to string labels
+ * instead of mapping them directly to uint256 balances. It also implements locking, unlocking and
+ * minting and burning functions.
+ */
 contract KNWToken {
     using SafeMath for uint256;
 
@@ -22,42 +30,78 @@ contract KNWToken {
 
     address public votingAddress;
 
+    /**
+     * @dev Sets the address of the voting contract that will be able to access the authorized functions
+     * @param _newVotingAddress The address of the authorized voting contract
+     */
     function setVotingAddress(address _newVotingAddress) external {
         require(_newVotingAddress != address(0) && votingAddress == address(0), "KNWVoting address can only be set if it's not empty and hasn't already been set");
         votingAddress = _newVotingAddress;
     }
     
-    // Returns the total KNW count (all labels)
+    /**
+     * @dev Total number of tokens for all labels
+     * @return A uint256 representing the total token amount
+     */
     function totalSupply() public view returns (uint256) {
         return _totalSupply;
     }
 
-    // Returns the KNW count of a single label
+    /**
+     * @dev Number of tokens for a certain label
+     * @param _label The label of the tokens
+     * @return A uint256 representing the token amount for this label
+     */
     function totalLabelSupply(string memory _label) public view returns (uint256) {
         return _labelSupply[_label];
     }
 
-    // Returns the KNW balance of a label at an address
+    /**
+     * @dev Gets the balance for a specified address for a certain label
+     * @param _address The address to query the balance of
+     * @param _label The label of the requested balance
+     * @return A uint256 representing the amount owned be the passed address for the specified label
+     */
     function balanceOfLabel(address _address, string memory _label) public view returns (uint256) {
         return _balances[_address][_label];
     }
 
-    // Returns the free (non-locked) KNW balance of a label at an address 
+    /**
+     * @dev Gets the non-locked balance for a specified address for a certain label
+     * @param _address The address to query the free balance of
+     * @param _label The label of the requested free balance
+     * @return A uint256 representing the non-locked amount owned be the passed address for the specified label
+     */
     function freeBalanceOfLabel(address _address, string memory _label) public view returns (uint256) {
         return _balances[_address][_label].sub(_lockedTokens[_address][_label]);
     }
 
-    // Returns the labels of an address and its label id
+    /**
+     * @dev Gets a specific label of an address
+     * @param _address The address to query the free balance of
+     * @param _labelID The id of the label
+     * @return The label (string)
+     */
     function labelOfAddress(address _address, uint256 _labelID) public view returns (string memory) {
         return _labels[_address][_labelID];
     }
 
-    // Returns the id of labels of an address
+    /**
+     * @dev Get the amount of labels that an address has
+     * @param _address The address to query the label count
+     * @return A uint256 representing the aount of labels that an address hat
+     */
     function labelCountOfAddress(address _address) public view returns (uint256) {
         return _labelCount[_address];
     }
 
-    // Locks and returns the free tokens of a label at an address
+    /**
+     * @dev Locks the non-locked amount of tokens for an address at a certain
+     * label and returns this amount
+     * @param _address The address to lock the free balance of
+     * @param _label The label of the free balance that ought to be locked
+     * @return A uint256 representing the amount of tokens that has now been locked
+     */
     function lockTokens(address _address, string memory _label) public returns (uint256 numberOfTokens) {
         require(msg.sender == votingAddress, "Only the KNWVoting contract is allowed to call this");
         numberOfTokens = 0;
@@ -68,14 +112,26 @@ contract KNWToken {
         return numberOfTokens;
     }
 
-    // Unlocks the specified amount of tokens (used after a vote is resolved)
+    /**
+     * @dev Unlocks the specified amount of tokens
+     * @param _address The address to unlock a certain balance of
+     * @param _label The label of the amount that ought to be unlocked
+     * @param _numberOfTokens The amount of tokens that is requested to be unlocked
+     * @return A uint256 representing the amount of tokens that has now been unlocked
+     */
     function unlockTokens(address _address, string _label, uint256 _numberOfTokens) public {
         require(msg.sender == votingAddress, "Only the KNWVoting contract is allowed to call this");
         require(_lockedTokens[_address][_label] <= _balances[_address][_label], "Cant lock more KNW than an address has");
         _lockedTokens[_address][_label] = _lockedTokens[_address][_label].sub(_numberOfTokens);
     }
 
-    // Mints new tokens according to the specified minting method and the winning percentage
+    /**
+     * @dev Mints new tokens according to the specified minting method and the winning percentage
+     * @param _address The address to receive new KNW tokens
+     * @param _label The label that new token will be minted for
+     * @param _winningPercentage The end result of the vote in percent
+     * @param _mintingMethod The method of minting that will be used
+     */
     function mint(address _address, string _label, uint256 _winningPercentage, uint256 _mintingMethod) external {
         require(msg.sender == votingAddress, "Only the KNWVoting contract is allowed to call this");
         require(_address != address(0), "Address can't be empty");
@@ -102,7 +158,14 @@ contract KNWToken {
         emit Mint(_address, _label, mintedKNW);
     }
 
-    // Burns tokens accoring to the specified burning method and the winning percentage
+    /**
+     * @dev Burns tokens accoring to the specified burning method and the winning percentage
+     * @param _address The address to receive new KNW tokens
+     * @param _label The label that new token will be minted for
+     * @param _stakedTokens The amount of tokens that was staked during the vote
+     * @param _winningPercentage The end result of the vote in percent
+     * @param _burningMethod The method of burning that will be used
+     */
     function burn(address _address, string _label, uint256 _stakedTokens, uint256 _winningPercentage, uint256 _burningMethod) external {
         require(msg.sender == votingAddress, "Only the KNWVoting contract is allowed to call this");
         require(_address != address(0), "Address can't be empty");
