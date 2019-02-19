@@ -6,6 +6,13 @@ interface KNWTokenContract {
     function setVotingAddress(address _newVotingAddress) external;
 }
 
+/**
+ * @title ditCoordinator
+ *
+ * @dev Implementation of the ditCoordinator contract, managing the access of
+ * repositories to the ditcraft ecosystem. Allows users to retrieve the address
+ * of ditContracts for repositories or otherwise deploy one.
+ */
 contract ditCoordinator {
     using SafeMath for uint256;
     
@@ -33,7 +40,16 @@ contract ditCoordinator {
         KNWToken = KNWTokenContract(KNWTokenAddress);
     }
 
-    // Creating a new dit-based repository
+    /**
+     * @dev Creats a new ditCraft-based repository
+     * @param _repository The name of the repository
+     * @param _label1 The first knowledge label of this repository (see KNWToken)
+     * @param _label2 The second knowledge label of this repository (see KNWToken)
+     * @param _label3 The third knowledge label of this repository (see KNWToken)
+     * @param _voteSettings A uint256 array (with a length of three) containing the necessary 
+     * voting majority, the minting and the burning method
+     * @return The address of the newly deployed ditContract
+     */
     function initRepository(string _repository, string _label1, string _label2, string _label3, uint256[3] _voteSettings) external returns (address newDitContract) {
         require(bytes(_repository).length > 0, "Name of the repository can't be empty");
         require(repositories[_repository].ditContract == address(0), "Repository can't already have a ditContract");
@@ -56,7 +72,11 @@ contract ditCoordinator {
         return newDitContract;
     }
 
-    // Returns a dit-based repository
+    /**
+     * @dev Gets a ditCraft-based repositories ditContract address
+     * @param _repository The name of the repository
+     * @return The address of the deployed ditContract
+     */
     function getRepository(string _repository) external view returns (address repositoryAddress) {
         require(bytes(_repository).length > 0, "Name of the repository can't be empty");
         return repositories[_repository].ditContract;
