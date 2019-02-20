@@ -12,7 +12,7 @@
  * to sign your transactions before they're sent to a remote public node. Infura API
  * keys are available for free at: infura.io/register
  *
- *   > > Using Truffle V5 or later? Make sure you install the `web3-one` version.
+ *   > > npm i truffle-hdwallet-provider `web3-one` version.
  *
  *   > > $ npm install truffle-hdwallet-provider@web3-one
  *
@@ -87,5 +87,7 @@ module.exports = {
       //  evmVersion: "byzantium"
       // }
     }
-  }
+  },
+
+  plugins: [ "truffle-security" ]
 }
