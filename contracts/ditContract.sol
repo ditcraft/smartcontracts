@@ -38,8 +38,8 @@ contract ditContract is ditContractInterface {
     string[] public knowledgeLabels;
     uint256 public currentProposalID;
 
-    uint256 constant public DEFAULT_COMMIT_DURATION = 60*5;
-    uint256 constant public DEFAULT_REVEAL_DURATION = 60*5;
+    uint256 constant public DEFAULT_COMMIT_DURATION = 60*3;
+    uint256 constant public DEFAULT_REVEAL_DURATION = 60*3;
 
     struct commitProposal {
         uint256 KNWVoteID;

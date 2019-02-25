@@ -2,13 +2,13 @@
 As the corner-stone of ditcraft, the smart contracts serve the most important purpose of the implementation. Nameley these are the **KNWToken, KNWVoting, ditCoordinator and the ditContract**s.
 
 ## Working with the project
-This repository contains a truffle v5.0.0 project. Feel free to insert your favorite provider into the `truffle-config.js` in order to deploy it. The config is preconfigured to read a 12-word mnemonic from a `.walletsecret` in the main directory and an infura API key in the form of `v3/<api_key>` in a `.infurakey` file in the same location. In order to get the gist of what happens during the deployment a look into the `migrations/2_main_migration.js` file is suggested.
+This repository contains a truffle v5 project. Feel free to insert your favorite provider into the `truffle-config.js` in order to deploy it. The config is preconfigured to read a 12-word mnemonic from a `.walletsecret` in the main directory and an infura API key in the form of `v3/<api_key>` in a `.infurakey` file in the same location. In order to get the gist of what happens during the deployment a look into the `migrations/2_main_migration.js` file is suggested.
 
 ## Deployed Contracts
 The contracts are currently deployed on the [Rinkeby Ethereum testnet](https://www.rinkeby.io) for development and testing purposes.
-- ditCoordinator: [0x808d9B0E0b36DCd34b64113F4c2AabadDc15743f](https://rinkeby.etherscan.io/address/0x808d9B0E0b36DCd34b64113F4c2AabadDc15743f)
-- KNWToken: [0xB999a62981f84674Eb72806Ba752ff9526Abab22](https://rinkeby.etherscan.io/address/0xB999a62981f84674Eb72806Ba752ff9526Abab22)
-- KNWVoting: [0x1BD208B3A0ADAbf8d4a0E08E2B02fF63057a66E9](https://rinkeby.etherscan.io/address/0x1BD208B3A0ADAbf8d4a0E08E2B02fF63057a66E9)
+- ditCoordinator: [0x60F01B8F86Aa3D1a61d1E1730B49BaeE09D8d72c](https://rinkeby.etherscan.io/address/0x60F01B8F86Aa3D1a61d1E1730B49BaeE09D8d72c)
+- KNWToken: [0xcB789c095551b0ad6D539B0EAB931E616e8e0ff6](https://rinkeby.etherscan.io/address/0xcB789c095551b0ad6D539B0EAB931E616e8e0ff6)
+- KNWVoting: [0x736ccEa99dF2eF910453A084505861AfffDF170f](https://rinkeby.etherscan.io/address/0x736ccEa99dF2eF910453A084505861AfffDF170f)
 
 Note: *You will need some ETH to interact with the contracts. You can obtain some test ETH from the official [Rinkeby faucet](https://faucet.rinkeby.io).*
 
