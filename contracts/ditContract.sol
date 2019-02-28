@@ -8,10 +8,10 @@ interface ditContractInterface {
     event Reveal(uint256 indexed proposal, address indexed who, string label, bool accept, uint256 numberOfVotes);
     event ProposalResolved(uint256 indexed proposal, string label, bool accepted);
 
-    function proposeCommit(uint256 _knowledgeLabelIndex) external payable;
+    function proposeCommit(uint256 _knowledgeLabelIndex, uint256 _voteCommitDuration, uint256 _voteOpenDuration) external payable;
     function voteOnProposal(uint256 _proposalID, bytes32 _voteHash) external payable;
-    function revealVoteOnProposal(uint256 _proposalID, uint256 _voteOption, uint256 _voteSalt) external;
-    function resolveVote(uint256 _proposalID) external;
+    function openVoteOnProposal(uint256 _proposalID, uint256 _voteOption, uint256 _voteSalt) external;
+    function finalizeVote(uint256 _proposalID) external;
     function proposalHasPassed(uint256 _proposalID) external view returns (bool hasPassed);
 }
 
@@ -34,12 +34,14 @@ contract ditContract is ditContractInterface {
 
     KNWVotingContract vote;
     
-    string public repository;
+    bytes32 public repository;
     string[] public knowledgeLabels;
     uint256 public currentProposalID;
 
-    uint256 constant public DEFAULT_COMMIT_DURATION = 60*3;
-    uint256 constant public DEFAULT_REVEAL_DURATION = 60*3;
+    uint256 public MIN_VOTE_COMMIT_DURATION = 0;
+    uint256 public MAX_VOTE_COMMIT_DURATION = 0;
+    uint256 public MIN_VOTE_OPEN_DURATION = 0;
+    uint256 public MAX_VOTE_OPEN_DURATION = 0;
 
     struct commitProposal {
         uint256 KNWVoteID;
@@ -60,7 +62,7 @@ contract ditContract is ditContractInterface {
 
     mapping (uint256 => commitProposal) public proposals;
    
-    constructor(address _KNWVotingAddress, address _ditCoordinatorAddress, string memory _repository, string memory _label1, string memory _label2, string memory _label3) public {
+    constructor(address _KNWVotingAddress, address _ditCoordinatorAddress, bytes32 _repository, string memory _label1, string memory _label2, string memory _label3, uint256[4] _voteSettings) public {
         require(_KNWVotingAddress != address(0) && _ditCoordinatorAddress != address (0), "KNWVoting and ditCoordinator address can't be empty");
         
         // Setting the KNWVote and ditCoordinator addresses
@@ -84,18 +86,28 @@ contract ditContract is ditContractInterface {
             knowledgeLabels.push(_label3);
         }
         require(knowledgeLabels.length > 0, "Provide at least one Knowledge Label");
+
+        // Setting the vote min and max durations 
+        require(_voteSettings[0] > 0 && _voteSettings[2] > 0, "Vote commit and open durations can't be zero");
+        require(_voteSettings[0] <= _voteSettings[1] && _voteSettings[2] <= _voteSettings[3], "Vote commit and open max has to be at least equal to min");
+
+        MIN_VOTE_COMMIT_DURATION = _voteSettings[0];
+        MAX_VOTE_COMMIT_DURATION = _voteSettings[1];
+        MIN_VOTE_OPEN_DURATION = _voteSettings[2];
+        MAX_VOTE_OPEN_DURATION = _voteSettings[3];
     }
 
     // Proposing a new commit for the repository
-    function proposeCommit(uint256 _knowledgeLabelIndex) external payable {
+    function proposeCommit(uint256 _knowledgeLabelIndex, uint256 _voteCommitDuration, uint256 _voteOpenDuration) external payable {
         require(msg.value > 0, "Value of the transaction can not be zero");
         require(_knowledgeLabelIndex <= knowledgeLabels.length-1, "Knowledge-Label index is not correct");
-
+        require(_voteCommitDuration >= MIN_VOTE_COMMIT_DURATION && _voteCommitDuration <= MAX_VOTE_COMMIT_DURATION, "Vote commit duration invalid");
+        require(_voteOpenDuration >= MIN_VOTE_OPEN_DURATION && _voteOpenDuration <= MAX_VOTE_OPEN_DURATION, "Vote open duration invalid");
         currentProposalID = currentProposalID.add(1);
 
         // Creating a new proposal
         proposals[currentProposalID] = commitProposal({
-            KNWVoteID: vote.startPoll(msg.sender, knowledgeLabels[_knowledgeLabelIndex], DEFAULT_COMMIT_DURATION, DEFAULT_REVEAL_DURATION, msg.value),
+            KNWVoteID: vote.startPoll(msg.sender, knowledgeLabels[_knowledgeLabelIndex], _voteCommitDuration, _voteOpenDuration, msg.value),
             knowledgeLabel: knowledgeLabels[_knowledgeLabelIndex],
             proposer: msg.sender,
             isResolved: false,
@@ -132,7 +144,7 @@ contract ditContract is ditContractInterface {
     }
 
     // Revealing a vote for a proposed commit
-    function revealVoteOnProposal(uint256 _proposalID, uint256 _voteOption, uint256 _voteSalt) external {
+    function openVoteOnProposal(uint256 _proposalID, uint256 _voteOption, uint256 _voteSalt) external {
         vote.revealVote(proposals[_proposalID].KNWVoteID, msg.sender, _voteOption, _voteSalt);
         
         // Saving the option of the voter
@@ -142,7 +154,7 @@ contract ditContract is ditContractInterface {
 
     // Resolving a vote
     // Note: the first caller will automatically resolve the proposal
-    function resolveVote(uint256 _proposalID) public {
+    function finalizeVote(uint256 _proposalID) public {
         // If the proposal hasn't been resolved this will be done by the first caller
         if(!proposals[_proposalID].isResolved) {
             proposals[_proposalID].proposalAccepted = vote.resolvePoll(proposals[_proposalID].KNWVoteID);
