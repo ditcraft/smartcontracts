@@ -1,8 +1,8 @@
-# ditcraft Smart Contracts
-As the corner-stone of ditcraft, the smart contracts serve the most important purpose of the implementation. Nameley these are the **KNWToken, KNWVoting, ditCoordinator and the ditContract**s.
+# ditCraft Smart Contracts
+As the corner-stone of ditCraft, the smart contracts serve the most important purpose of the implementation. Nameley these are the **KNWToken, KNWVoting, ditCoordinator and the ditContract**s.
 
 ## Working with the project
-This repository contains a truffle v5 project. Feel free to insert your favorite provider into the `truffle-config.js` in order to deploy it. The config is preconfigured to read a 12-word mnemonic from a `.walletsecret` in the main directory and an infura API key in the form of `v3/<api_key>` in a `.infurakey` file in the same location. In order to get the gist of what happens during the deployment a look into the `migrations/2_main_migration.js` file is suggested.
+This repository contains a truffle v5 project. Feel free to insert your favorite provider into the `truffle-config.js` in order to deploy it. The config is preconfigured to read a 12-word mnemonic from a `.walletsecret` file in the main directory and an infura API key in the form of `v3/<api_key>` in a `.infurakey` file in the same location. In order to get the gist of what happens during the deployment a look into the `migrations/2_main_migration.js` file is suggested.
 
 ## Deployed Contracts
 The contracts are currently deployed on the [Rinkeby Ethereum testnet](https://www.rinkeby.io) for development and testing purposes.
@@ -67,10 +67,9 @@ The ditContracts are the controlling instance for every repository. This is the 
  - `proposeCommit(label)`
 	 -  initiates a new proposal and thus starts a new vote
  - `voteOnProposal(proposalID, voteHash)` (also triggers the locking of KNW tokens)
-	 -  votes on a proposal with the hashed vote
- - `revealVoteOnProposal(proposalID, choice, salt)`
-	 - reveals the vote on a proposal to the public
- - `resolveVote(proposalID)`
-	 - first caller: automatically resolves the proposal and signals the developer that a merge to the main branch is now possible 
-	 - everyone: claims the reward of the participant for this proposals' vote (also triggers the minting/burning of KNW tokens)
+	 -  votes on a proposal with the concealed/hashed vote
+ - `openVoteOnProposal(proposalID, choice, salt)`
+	 - opens the concealed vote on a proposal and reveals it to the public
+ - `finalizeVote(proposalID)`
+	 finalizes the vote for the individual calling participant and claims the reward for this proposals' vote (also triggers the minting/burning of KNW tokens)
 	 
