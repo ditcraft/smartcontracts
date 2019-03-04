@@ -185,22 +185,4 @@ contract ditContract is ditContractInterface {
         require(proposals[_proposalID].isResolved, "Proposal hasn't been resolved");
         return proposals[_proposalID].proposalAccepted;
     }
-
-    // Helper function: converting bytes32 to string
-    function bytes32ToString(bytes32 x) internal pure returns (string memory) {
-        bytes memory bytesString = new bytes(32);
-        uint charCount = 0;
-        for (uint j = 0; j < 32; j++) {
-            byte char = byte(bytes32(uint(x) * 2 ** (8 * j)));
-            if (char != 0) {
-                bytesString[charCount] = char;
-                charCount++;
-            }
-        }
-        bytes memory bytesStringTrimmed = new bytes(charCount);
-        for (uint i = 0; i < charCount; i++) {
-            bytesStringTrimmed[i] = bytesString[i];
-        }
-        return string(bytesStringTrimmed);
-    }
 }
