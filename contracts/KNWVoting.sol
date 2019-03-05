@@ -15,7 +15,7 @@ interface KNWTokenContract {
 contract KNWVoting {
     using SafeMath for uint;
 
-    struct KNWPoll {
+    struct KNWVote {
         address initiatingContract;     // Initiating ditContract
         string knowledgeLabel;          // Knowledge-Label that will be used
         uint256 commitEndDate;          // End-Timestamp of the commit phase
@@ -35,22 +35,22 @@ contract KNWVoting {
     struct Stake {
         uint256 proposersStake;     // Stake of the proposer that will be the limit of the voters stakes
         uint256 proposersReward;    // Calculated end-reward of the proposer
-        uint256 returnPool;         // Pool of ETH that will be returned to the participants
-        uint256 rewardPool;         // Pool of ETH that will be rewarded to the participants on the winning side
+        uint256 returnPool;         // Pool of ETH that will be returned to the voting participants
+        uint256 rewardPool;         // Pool of ETH that will be rewarded to the voting participants on the winning side
     } 
 
     struct Participant {
-        bool didCommit;         // Inidicated whether a participant has commited a vote
-        bool didReveal;         // Inidicated whether a participant has revealed his vote
-        bool isProposer;        // Inidicated whether a participant is the proposer of this vote
-        uint256 numKNW;         // Count of KNW that a participant used in this vote
+        bool didCommit;         // Inidicates whether a participant has commited a vote
+        bool didReveal;         // Inidicates whether a participant has revealed his vote
+        bool isProposer;        // Inidicates whether a participant is the proposer of this vote
+        uint256 numKNW;         // Count of KNW that a participant uses in this vote
         uint256 numVotes;       // Count of votes that a participant has in this vote
         uint256 commitHash;     // The hashed vote of a participant
     }
 
     // ditContract that are interacting with this contract are stored in this struct
-    struct DitContractSettings {
-        bool accepted;
+    struct ditContractSettings {
+        bool authorized;
         uint256 burningMethod;
         uint256 mintingMethod;
         uint256 majority;
@@ -66,14 +66,14 @@ contract KNWVoting {
     KNWTokenContract token;
     
     // maps the addresses of contracts that are allowed to call this contracts functions
-    mapping (address => DitContractSettings) ditContracts;
+    mapping (address => ditContractSettings) ditContracts;
 
     // nonce of the current poll
     uint256 constant public INITIAL_POLL_NONCE = 0;
     uint256 public pollNonce;
 
     // maps pollID to Poll struct
-    mapping(uint256 => KNWPoll) public pollMap;
+    mapping(uint256 => KNWVote) public pollMap;
     mapping(uint256 => Stake) public stakeMap; 
 
     constructor() public {
@@ -84,7 +84,7 @@ contract KNWVoting {
     function setCoordinatorAddress(address _newCoordinatorAddress) external {
         require(_newCoordinatorAddress != address(0) && ditCoordinatorAddress == address(0), "ditCoordinator address can only be set if it's not empty and hasn't already been set");
         ditCoordinatorAddress = _newCoordinatorAddress;
-        ditContracts[ditCoordinatorAddress].accepted = true;
+        ditContracts[ditCoordinatorAddress].authorized = true;
     }
 
     // Setting the address of the KNWToken contract
@@ -97,7 +97,7 @@ contract KNWVoting {
     // Adding a new ditContracts address that will be allowed to use this contract    
     function addDitContract(address _newContract, uint256 _majority, uint256 _mintingMethod, uint256 _burningMethod) external {
         require(msg.sender == ditCoordinatorAddress, "Only the ditCoordinator can call this");
-        ditContracts[_newContract].accepted = true;
+        ditContracts[_newContract].authorized = true;
         ditContracts[_newContract].majority = _majority;
         ditContracts[_newContract].mintingMethod = _mintingMethod;
         ditContracts[_newContract].burningMethod = _burningMethod;
@@ -106,7 +106,7 @@ contract KNWVoting {
     // Removing a ditContract address that won't be allowed to use this contract anymore
     function removeDitContract(address _obsoleteContract) external {
         require(msg.sender == ditCoordinatorAddress, "Only the ditCoordinator can call this");
-        ditContracts[_obsoleteContract].accepted = false;
+        ditContracts[_obsoleteContract].authorized = false;
     }
 
     // Starts a new poll
@@ -118,7 +118,7 @@ contract KNWVoting {
         uint256 revealEndDate = commitEndDate.add(_revealDuration);
 
         // Creating a new poll
-        pollMap[pollNonce] = KNWPoll({
+        pollMap[pollNonce] = KNWVote({
             initiatingContract: msg.sender,
             knowledgeLabel: _knowledgeLabel,
             commitEndDate: commitEndDate,
@@ -306,7 +306,7 @@ contract KNWVoting {
     
     // Allowing participants who voted according to what the right decision was to claim their "reward" after the vote ended
     function resolveVote(uint256 _pollID, uint256 _voteOption, address _address) external calledByInitiatingDitContract(_pollID, msg.sender) returns (uint256 reward) {
-        KNWPoll storage poll = pollMap[_pollID];
+        KNWVote storage poll = pollMap[_pollID];
         // vote needs to be resolved and only participants who revealed their vote
         require(poll.isResolved, "Poll has to be resolved");
 
@@ -359,7 +359,7 @@ contract KNWVoting {
     function isPassed(uint256 _pollID) public view returns (bool passed) {
         require(pollEnded(_pollID), "Poll has to have ended");
 
-        KNWPoll memory poll = pollMap[_pollID];
+        KNWVote memory poll = pollMap[_pollID];
         return (100 * poll.votesFor) > (poll.voteQuorum * (poll.votesFor + poll.votesAgainst));
     }
     
@@ -446,7 +446,7 @@ contract KNWVoting {
     
     // Modifier: function can only be called by a listed dit contract
     modifier calledByDitContract (address _address) {
-        require(ditContracts[_address].accepted == true, "Only a ditContract is allow to call this");
+        require(ditContracts[_address].authorized == true, "Only a ditContract is allow to call this");
         _;
     }
 
