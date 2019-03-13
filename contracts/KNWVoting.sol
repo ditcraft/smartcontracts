@@ -16,7 +16,7 @@ contract KNWVoting {
     using SafeMath for uint;
 
     struct KNWVote {
-        address initiatingContract;     // Initiating ditContract
+        bytes32 repository;             // Initiating ditContract
         string knowledgeLabel;          // Knowledge-Label that will be used
         uint256 commitEndDate;          // End-Timestamp of the commit phase
         uint256 revealEndDate;          // End-Timestamp of the reveal phase
@@ -49,8 +49,7 @@ contract KNWVoting {
     }
 
     // ditContract that are interacting with this contract are stored in this struct
-    struct ditContractSettings {
-        bool authorized;
+    struct ditRepositorySettings {
         uint256 burningMethod;
         uint256 mintingMethod;
         uint256 majority;
@@ -66,7 +65,7 @@ contract KNWVoting {
     KNWTokenContract token;
     
     // maps the addresses of contracts that are allowed to call this contracts functions
-    mapping (address => ditContractSettings) ditContracts;
+    mapping (bytes32 => ditRepositorySettings) ditRepositories;
 
     // nonce of the current poll
     uint256 constant public INITIAL_POLL_NONCE = 0;
@@ -84,7 +83,6 @@ contract KNWVoting {
     function setCoordinatorAddress(address _newCoordinatorAddress) external {
         require(_newCoordinatorAddress != address(0) && ditCoordinatorAddress == address(0), "ditCoordinator address can only be set if it's not empty and hasn't already been set");
         ditCoordinatorAddress = _newCoordinatorAddress;
-        ditContracts[ditCoordinatorAddress].authorized = true;
     }
 
     // Setting the address of the KNWToken contract
@@ -94,23 +92,21 @@ contract KNWVoting {
         token = KNWTokenContract(KNWTokenAddress);
     }
 
-    // Adding a new ditContracts address that will be allowed to use this contract    
-    function addDitContract(address _newContract, uint256 _majority, uint256 _mintingMethod, uint256 _burningMethod) external {
+    // Adding a new ditRepositories address that will be allowed to use this contract    
+    function addNewRepository(bytes32 _newRepository, uint256 _majority, uint256 _mintingMethod, uint256 _burningMethod) external {
         require(msg.sender == ditCoordinatorAddress, "Only the ditCoordinator can call this");
-        ditContracts[_newContract].authorized = true;
-        ditContracts[_newContract].majority = _majority;
-        ditContracts[_newContract].mintingMethod = _mintingMethod;
-        ditContracts[_newContract].burningMethod = _burningMethod;
+        ditRepositories[_newRepository].majority = _majority;
+        ditRepositories[_newRepository].mintingMethod = _mintingMethod;
+        ditRepositories[_newRepository].burningMethod = _burningMethod;
     }
     
-    // Removing a ditContract address that won't be allowed to use this contract anymore
-    function removeDitContract(address _obsoleteContract) external {
-        require(msg.sender == ditCoordinatorAddress, "Only the ditCoordinator can call this");
-        ditContracts[_obsoleteContract].authorized = false;
-    }
+    // // Removing a ditContract address that won't be allowed to use this contract anymore
+    // function removeDitContract(bytes32 _obsoleteRepository) external {
+    //     require(msg.sender == ditCoordinatorAddress, "Only the ditCoordinator can call this");
+    // }
 
     // Starts a new poll
-    function startPoll(address _address, string _knowledgeLabel, uint256 _commitDuration, uint256 _revealDuration, uint256 _proposersStake) external calledByDitContract(msg.sender) returns (uint256 pollID) {
+    function startPoll(bytes32 _repository, address _address, string _knowledgeLabel, uint256 _commitDuration, uint256 _revealDuration, uint256 _proposersStake) external calledByDitCoordinator(msg.sender) returns (uint256 pollID) {
         pollNonce = pollNonce.add(1);
 
         // Calculating the timestamps for the commit and reveal phase
@@ -119,11 +115,11 @@ contract KNWVoting {
 
         // Creating a new poll
         pollMap[pollNonce] = KNWVote({
-            initiatingContract: msg.sender,
+            repository: _repository,
             knowledgeLabel: _knowledgeLabel,
             commitEndDate: commitEndDate,
             revealEndDate: revealEndDate,
-            voteQuorum: ditContracts[msg.sender].majority,
+            voteQuorum: ditRepositories[_repository].majority,
             votesFor: 0,
             votesAgainst: 0,
             votesUnrevealed: 0,
@@ -151,7 +147,7 @@ contract KNWVoting {
     }
 
     // Commits a vote using hash of choice and secret salt to conceal vote until reveal
-    function commitVote(uint256 _pollID, address _address, bytes32 _secretHash) external calledByInitiatingDitContract(_pollID, msg.sender) returns (uint256 numVotes) {
+    function commitVote(uint256 _pollID, address _address, bytes32 _secretHash) external calledByDitCoordinator(msg.sender) returns (uint256 numVotes) {
         require(_pollID != 0, "pollID can't be zero");
         require(commitPeriodActive(_pollID), "Commit period has to be active");
         require(!didCommit(_address, _pollID), "Can't commit more than one vote");
@@ -188,7 +184,7 @@ contract KNWVoting {
     }
 
     // Reveals the vote with the option and the salt used to generate the commitHash
-    function revealVote(uint256 _pollID, address _address, uint256 _voteOption, uint256 _salt) external calledByInitiatingDitContract(_pollID, msg.sender) {
+    function revealVote(uint256 _pollID, address _address, uint256 _voteOption, uint256 _salt) external calledByDitCoordinator(msg.sender) {
         require(revealPeriodActive(_pollID), "Reveal period has to be active");
         require(pollMap[_pollID].participant[_address].didCommit, "Participant has to have a vote commited");
         require(!pollMap[_pollID].participant[_address].didReveal, "Can't reveal a vote more than once");
@@ -215,7 +211,7 @@ contract KNWVoting {
     }
 
     // Resolves a poll and calculates the outcome
-    function resolvePoll(uint256 _pollID) external calledByInitiatingDitContract(_pollID, msg.sender) returns (bool votePassed) {
+    function resolvePoll(uint256 _pollID) external calledByDitCoordinator(msg.sender) returns (bool votePassed) {
         require(pollEnded(_pollID), "Poll has to have ended");
 
         uint256 totalVotes = pollMap[_pollID].votesFor.add(pollMap[_pollID].votesAgainst);
@@ -305,7 +301,7 @@ contract KNWVoting {
     }
     
     // Allowing participants who voted according to what the right decision was to claim their "reward" after the vote ended
-    function resolveVote(uint256 _pollID, uint256 _voteOption, address _address) external calledByInitiatingDitContract(_pollID, msg.sender) returns (uint256 reward) {
+    function resolveVote(uint256 _pollID, uint256 _voteOption, address _address) external calledByDitCoordinator(msg.sender) returns (uint256 reward) {
         KNWVote storage poll = pollMap[_pollID];
         // vote needs to be resolved and only participants who revealed their vote
         require(poll.isResolved, "Poll has to be resolved");
@@ -320,10 +316,10 @@ contract KNWVoting {
         if(poll.participant[_address].isProposer) {
             // the proposer is a special participant that is handled separately
             if(votePassed) {
-                token.mint(_address, poll.knowledgeLabel, poll.winningPercentage, ditContracts[poll.initiatingContract].mintingMethod);
+                token.mint(_address, poll.knowledgeLabel, poll.winningPercentage, ditRepositories[poll.repository].mintingMethod);
             } else if(stakeMap[_pollID].proposersReward == 0) {
                 // proposers reward is only zero if he lost the vote on the proposal, otherwise it was a draw
-                token.burn(_address, poll.knowledgeLabel, poll.participant[_address].numKNW, poll.winningPercentage, ditContracts[poll.initiatingContract].burningMethod);
+                token.burn(_address, poll.knowledgeLabel, poll.participant[_address].numKNW, poll.winningPercentage, ditRepositories[poll.repository].burningMethod);
             }
             reward = stakeMap[_pollID].proposersReward;
         } else if(didReveal(_address, _pollID)) {
@@ -337,16 +333,16 @@ contract KNWVoting {
                 reward = calculateStakeReturn(_pollID, votedRight, false);
                 // participants who voted for the winning option 
                 if(votedRight) {
-                    token.mint(_address, poll.knowledgeLabel, poll.winningPercentage, ditContracts[poll.initiatingContract].mintingMethod);
+                    token.mint(_address, poll.knowledgeLabel, poll.winningPercentage, ditRepositories[poll.repository].mintingMethod);
                 // participants who votes for the losing option
                 } else {
-                    token.burn(_address, poll.knowledgeLabel, poll.participant[_address].numKNW, poll.winningPercentage, ditContracts[poll.initiatingContract].burningMethod);
+                    token.burn(_address, poll.knowledgeLabel, poll.participant[_address].numKNW, poll.winningPercentage, ditRepositories[poll.repository].burningMethod);
                 }
             }
         // participants who didn't reveal but participated are assumed to have voted for the losing option
         } else if (!didReveal(_address, _pollID) && didCommit(_address, _pollID)){
             reward = calculateStakeReturn(_pollID, false, false);
-            token.burn(_address, poll.knowledgeLabel, poll.participant[_address].numKNW, poll.winningPercentage, ditContracts[poll.initiatingContract].burningMethod);
+            token.burn(_address, poll.knowledgeLabel, poll.participant[_address].numKNW, poll.winningPercentage, ditRepositories[poll.repository].burningMethod);
         // participants who didn't participate at all
         } else {
             revert("Not a participant of the vote");
@@ -445,14 +441,8 @@ contract KNWVoting {
     }
     
     // Modifier: function can only be called by a listed dit contract
-    modifier calledByDitContract (address _address) {
-        require(ditContracts[_address].authorized == true, "Only a ditContract is allow to call this");
-        _;
-    }
-
-    // Modifier: function can only be called by the initiaiting dit contract
-    modifier calledByInitiatingDitContract (uint256 _pollID, address _address) {
-        require(pollMap[_pollID].initiatingContract == _address, "Only the initiating contract is allow to call this");
+    modifier calledByDitCoordinator (address _address) {
+        require(ditCoordinatorAddress == _address, "Only the ditCoordinator is allow to call this");
         _;
     }
 }
