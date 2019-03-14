@@ -1,12 +1,11 @@
 const KNWToken = artifacts.require("KNWToken");
 const KNWVoting = artifacts.require("KNWVoting");
 const ditCoordinator = artifacts.require("ditCoordinator");
-const ditContract = artifacts.require("ditContract");
 
 module.exports = async function(callback) {
     console.log("------ start ------");
 
-    let voteSettings = [50,0,0];
+    let voteSettings = [50,0,0,60,70,60,70];
     let no_reveal = false;
     let randomNumber = Math.floor(Math.random() * 10000);
     let no_new = false;
@@ -61,8 +60,9 @@ module.exports = async function(callback) {
     let label2 = "c";
     let label3 = "java"; 
     let accounts = await web3.eth.getAccounts();
-    let repoName = "testRepo" + randomNumber;
-    console.log("Repository: " + repoName);
+    let repoName = web3.utils.soliditySha3("github.com/testRepo" + randomNumber);
+    console.log("Repository: " + "github.com/testRepo" + randomNumber);
+    console.log("Hash: " + repoName)
 
     // Instances
     let ditCoordinatorInstance = await ditCoordinator.deployed();
@@ -75,32 +75,30 @@ module.exports = async function(callback) {
         console.log("initRepo done");
     }
 
-    let ditContractAddress = await ditCoordinatorInstance.getRepository(repoName);
-    let ditContractInstance = await ditContract.at(ditContractAddress);
-
     console.log("------ addresses ------");
     console.log("Coordinator: " + ditCoordinatorInstance.address);
-    console.log("Contract: " + ditContractInstance.address);
     console.log("KNWToken: " + KNWTokenInstance.address);
     console.log("KNWVoting: " + KNWVotingInstance.address);
     console.log("------ vote starts ------");
 
     // Proposing a commit
     //let randomEthValue = (Math.random() * 0.01 + 0.001);
-    let randomEthValue = 0.01
+    let randomEthValue = 0.001
     let USED_STAKE =  web3.utils.toWei(randomEthValue.toString(), 'ether');
-    await ditContractInstance.proposeCommit(0, {from: accounts[0], value: USED_STAKE});
+    await ditCoordinatorInstance.proposeCommit(repoName, 0, 60, 60, {from: accounts[0], value: USED_STAKE});
     console.log("proposed commit")
 
-    let proposalID = await ditContractInstance.currentProposalID.call();
+    let proposalID = await ditCoordinatorInstance.getCurrentProposalID(repoName);
     console.log("proposalID: " + proposalID);
 
-    let voteID = (await ditContractInstance.proposals(proposalID)).KNWVoteID;
-    
+    let voteID = await ditCoordinatorInstance.getKNWVoteIDFromProposalID(repoName, proposalID);
+    console.log("voteID: " + proposalID);
+
     // Voting on the proposal
     // (Starting at 1 since the initiatior already voted with his proposal)
     for(var i = 1; i < 6; i++) {
-        ditContractInstance.voteOnProposal(
+        ditCoordinatorInstance.voteOnProposal(
+            repoName,
             proposalID, 
             web3.utils.keccak256(web3.eth.abi.encodeParameters(['uint256','uint256'], [choices[i], salts[i]])), 
             {from: accounts[i], value: USED_STAKE})
@@ -141,7 +139,7 @@ module.exports = async function(callback) {
     // Revealing votes
     for(var i = 1; i < 6; i++) {
         if(no_reveal && i == 5) { break; } 
-        ditContractInstance.revealVoteOnProposal(proposalID, choices[i], salts[i], {from: accounts[i]});
+        ditCoordinatorInstance.openVoteOnProposal(repoName, proposalID, choices[i], salts[i], {from: accounts[i]});
     }  
 
     // Waiting for reveals
@@ -200,7 +198,7 @@ module.exports = async function(callback) {
 
     // Claiming the reward
     for(var i = 0; i <= 5; i++) {
-        ditContractInstance.resolveVote(proposalID, {from: accounts[i]});
+        ditCoordinatorInstance.finalizeVote(repoName, proposalID, {from: accounts[i]});
     }
 
     // Waiting for the claims
