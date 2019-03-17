@@ -6,9 +6,9 @@ This repository contains a truffle v5 project. Feel free to insert your favorite
 
 ## Deployed Contracts
 The contracts are currently deployed on the [Rinkeby Ethereum testnet](https://www.rinkeby.io) for development and testing purposes.
-- ditCoordinator: [0x60F01B8F86Aa3D1a61d1E1730B49BaeE09D8d72c](https://rinkeby.etherscan.io/address/0x60F01B8F86Aa3D1a61d1E1730B49BaeE09D8d72c)
-- KNWToken: [0xcB789c095551b0ad6D539B0EAB931E616e8e0ff6](https://rinkeby.etherscan.io/address/0xcB789c095551b0ad6D539B0EAB931E616e8e0ff6)
-- KNWVoting: [0x736ccEa99dF2eF910453A084505861AfffDF170f](https://rinkeby.etherscan.io/address/0x736ccEa99dF2eF910453A084505861AfffDF170f)
+- ditCoordinator: [0x8b8571Eb59138aE1EE9D250e6D4f9a858bC75421](https://rinkeby.etherscan.io/address/0x8b8571Eb59138aE1EE9D250e6D4f9a858bC75421)
+- KNWToken: [0x87147fD4De707a73B149d672ed75eddCbdAa1308](https://rinkeby.etherscan.io/address/0x87147fD4De707a73B149d672ed75eddCbdAa1308)
+- KNWVoting: [0xB71eD0E58CFad38d5965a816886a93D35c11E8B7](https://rinkeby.etherscan.io/address/0xB71eD0E58CFad38d5965a816886a93D35c11E8B7)
 
 Note: *You will need some ETH to interact with the contracts. You can obtain some test ETH from the official [Rinkeby faucet](https://faucet.rinkeby.io).*
 
