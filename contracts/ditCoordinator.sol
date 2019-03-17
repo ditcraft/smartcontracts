@@ -37,7 +37,7 @@ contract ditCoordinator {
         uint256 maxVoteCommitDuration;
         uint256 minVoteOpenDuration;
         uint256 maxVoteOpenDuration;
-        mapping (uint256 => commitProposal) proposals;
+        //mapping (uint256 => commitProposal) proposals;
     }
 
     struct commitProposal {
@@ -64,6 +64,7 @@ contract ditCoordinator {
     KNWTokenContract KNWToken;
 
     mapping (bytes32 => ditRepository) public repositories;
+    mapping (bytes32 => mapping(uint256 => commitProposal)) public proposalsOfRepository;
 
     event ProposeCommit(bytes32 indexed repository, uint256 indexed proposal, address indexed who, string label);
     event CommitVote(bytes32 indexed repository, uint256 indexed proposal, address indexed who, string label, uint256 stake, uint256 numberOfVotes);
@@ -133,7 +134,7 @@ contract ditCoordinator {
         repositories[_repository].currentProposalID = repositories[_repository].currentProposalID.add(1);
 
         // Creating a new proposal
-        repositories[_repository].proposals[repositories[_repository].currentProposalID] = commitProposal({
+        proposalsOfRepository[_repository][repositories[_repository].currentProposalID] = commitProposal({
             KNWVoteID: KNWVote.startPoll(_repository, msg.sender, repositories[_repository].knowledgeLabels[_knowledgeLabelIndex], _voteCommitDuration, _voteOpenDuration, msg.value),
             knowledgeLabel: repositories[_repository].knowledgeLabels[_knowledgeLabelIndex],
             proposer: msg.sender,
@@ -144,71 +145,75 @@ contract ditCoordinator {
         });
 
         // Adding the proposers stake to the total staked amount
-        repositories[_repository].proposals[repositories[_repository].currentProposalID].totalStake = repositories[_repository].proposals[repositories[_repository].currentProposalID].totalStake.add(msg.value);
+        proposalsOfRepository[_repository][repositories[_repository].currentProposalID].totalStake = proposalsOfRepository[_repository][repositories[_repository].currentProposalID].totalStake.add(msg.value);
 
         emit ProposeCommit(_repository, repositories[_repository].currentProposalID, msg.sender, repositories[_repository].knowledgeLabels[_knowledgeLabelIndex]);
     }
 
     // Casting a vote for a proposed commit
     function voteOnProposal(bytes32 _repository, uint256 _proposalID, bytes32 _voteHash) public payable {
-        require(msg.value == repositories[_repository].proposals[_proposalID].individualStake, "Value of the transaction doesn't match the required stake");
-        require(msg.sender != repositories[_repository].proposals[_proposalID].proposer, "The proposer is not allowed to vote in a proposal");
+        require(msg.value == proposalsOfRepository[_repository][_proposalID].individualStake, "Value of the transaction doesn't match the required stake");
+        require(msg.sender != proposalsOfRepository[_repository][_proposalID].proposer, "The proposer is not allowed to vote in a proposal");
         
         // Increasing the total stake of this proposal (necessary for security purposes during the payout)
-        repositories[_repository].proposals[_proposalID].totalStake = repositories[_repository].proposals[_proposalID].totalStake.add(msg.value);
+        proposalsOfRepository[_repository][_proposalID].totalStake = proposalsOfRepository[_repository][_proposalID].totalStake.add(msg.value);
 
         // The vote contract returns the number of votes that the voter has in this vote (including the KNW influence)
-        uint256 numberOfVotes = KNWVote.commitVote(repositories[_repository].proposals[_proposalID].KNWVoteID, msg.sender, _voteHash);
+        uint256 numberOfVotes = KNWVote.commitVote(proposalsOfRepository[_repository][_proposalID].KNWVoteID, msg.sender, _voteHash);
         require(numberOfVotes > 0, "Voting contract returned an invalid amount of votes");
 
-        repositories[_repository].proposals[_proposalID].participantDetails[msg.sender].numberOfVotes = numberOfVotes;
+        proposalsOfRepository[_repository][_proposalID].participantDetails[msg.sender].numberOfVotes = numberOfVotes;
 
-        emit CommitVote(_repository, _proposalID, msg.sender, repositories[_repository].proposals[_proposalID].knowledgeLabel, msg.value, numberOfVotes);
+        emit CommitVote(_repository, _proposalID, msg.sender, proposalsOfRepository[_repository][_proposalID].knowledgeLabel, msg.value, numberOfVotes);
     }
 
     // Revealing a vote for a proposed commit
     function openVoteOnProposal(bytes32 _repository, uint256 _proposalID, uint256 _voteOption, uint256 _voteSalt) external {
-        KNWVote.revealVote(repositories[_repository].proposals[_proposalID].KNWVoteID, msg.sender, _voteOption, _voteSalt);
+        KNWVote.revealVote(proposalsOfRepository[_repository][_proposalID].KNWVoteID, msg.sender, _voteOption, _voteSalt);
         
         // Saving the option of the voter
-        repositories[_repository].proposals[_proposalID].participantDetails[msg.sender].choice = _voteOption;
-        emit OpenVote(_repository, _proposalID, msg.sender, repositories[_repository].proposals[_proposalID].knowledgeLabel, (_voteOption == 1), repositories[_repository].proposals[_proposalID].participantDetails[msg.sender].numberOfVotes);
+        proposalsOfRepository[_repository][_proposalID].participantDetails[msg.sender].choice = _voteOption;
+        emit OpenVote(_repository, _proposalID, msg.sender, proposalsOfRepository[_repository][_proposalID].knowledgeLabel, (_voteOption == 1), proposalsOfRepository[_repository][_proposalID].participantDetails[msg.sender].numberOfVotes);
     }
 
     // Resolving a vote
     // Note: the first caller will automatically resolve the proposal
     function finalizeVote(bytes32 _repository, uint256 _proposalID) public {
-        require(!repositories[_repository].proposals[_proposalID].participantDetails[msg.sender].hasFinalized, "Each participant can only finalize once");
-        require(repositories[_repository].proposals[_proposalID].participantDetails[msg.sender].numberOfVotes > 0 || repositories[_repository].proposals[_proposalID].proposer == msg.sender, "Only participants of the vote are able to resolve the vote");
+        require(!proposalsOfRepository[_repository][_proposalID].participantDetails[msg.sender].hasFinalized, "Each participant can only finalize once");
+        require(proposalsOfRepository[_repository][_proposalID].participantDetails[msg.sender].numberOfVotes > 0 || proposalsOfRepository[_repository][_proposalID].proposer == msg.sender, "Only participants of the vote are able to resolve the vote");
 
         // If the proposal hasn't been resolved this will be done by the first caller
-        if(!repositories[_repository].proposals[_proposalID].isFinalized) {
-            repositories[_repository].proposals[_proposalID].proposalAccepted = KNWVote.resolvePoll(repositories[_repository].proposals[_proposalID].KNWVoteID);
-            repositories[_repository].proposals[_proposalID].isFinalized = true;
+        if(!proposalsOfRepository[_repository][_proposalID].isFinalized) {
+            proposalsOfRepository[_repository][_proposalID].proposalAccepted = KNWVote.resolvePoll(proposalsOfRepository[_repository][_proposalID].KNWVoteID);
+            proposalsOfRepository[_repository][_proposalID].isFinalized = true;
 
-            emit FinalizeVote(_repository, _proposalID, repositories[_repository].proposals[_proposalID].knowledgeLabel, repositories[_repository].proposals[_proposalID].proposalAccepted);
+            emit FinalizeVote(_repository, _proposalID, proposalsOfRepository[_repository][_proposalID].knowledgeLabel, proposalsOfRepository[_repository][_proposalID].proposalAccepted);
         }
         
         // The vote contract returns the amount of ETH that the participant will receive
-        uint256 value = KNWVote.resolveVote(repositories[_repository].proposals[_proposalID].KNWVoteID, repositories[_repository].proposals[_proposalID].participantDetails[msg.sender].choice, msg.sender);
+        uint256 value = KNWVote.resolveVote(proposalsOfRepository[_repository][_proposalID].KNWVoteID, proposalsOfRepository[_repository][_proposalID].participantDetails[msg.sender].choice, msg.sender);
         
         // If the value is greater than zero, it will be transferred to the caller
         if(value > 0) {
             msg.sender.transfer(value);
         }
         
-        repositories[_repository].proposals[_proposalID].totalStake = repositories[_repository].proposals[_proposalID].totalStake.sub(value);
-        repositories[_repository].proposals[_proposalID].participantDetails[msg.sender].hasFinalized = true;
+        proposalsOfRepository[_repository][_proposalID].totalStake = proposalsOfRepository[_repository][_proposalID].totalStake.sub(value);
+        proposalsOfRepository[_repository][_proposalID].participantDetails[msg.sender].hasFinalized = true;
     }
 
     function getIndividualStake(bytes32 _repository, uint256 _proposalID) external view returns (uint256 individualStake) {
-        return repositories[_repository].proposals[_proposalID].individualStake;
+        return proposalsOfRepository[_repository][_proposalID].individualStake;
     }
 
     // Returns whether a proposal has passed or not
     function proposalHasPassed(bytes32 _repository, uint256 _proposalID) external view returns (bool hasPassed) {
-        require(repositories[_repository].proposals[_proposalID].isFinalized, "Proposal hasn't been resolved");
-        return repositories[_repository].proposals[_proposalID].proposalAccepted;
+        require(proposalsOfRepository[_repository][_proposalID].isFinalized, "Proposal hasn't been resolved");
+        return proposalsOfRepository[_repository][_proposalID].proposalAccepted;
+    }
+
+    function getKnowledgeLabels(bytes32 _repository, uint256 _knowledgeLabelID) external view returns (string knowledgeLabel) {
+        return repositories[_repository].knowledgeLabels[_knowledgeLabelID];
     }
 
     function getCurrentProposalID(bytes32 _repository) external view returns (uint256) {
@@ -216,6 +221,6 @@ contract ditCoordinator {
     }
 
     function getKNWVoteIDFromProposalID(bytes32 _repository, uint256 _proposalID) external view returns (uint256) {
-        return repositories[_repository].proposals[_proposalID].KNWVoteID;
+        return proposalsOfRepository[_repository][_proposalID].KNWVoteID;
     }
 }
