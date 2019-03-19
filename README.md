@@ -1,5 +1,5 @@
 # ditCraft Smart Contracts
-As the corner-stone of ditCraft, the smart contracts serve the most important purpose of the implementation. Nameley these are the **KNWToken, KNWVoting, ditCoordinator and the ditContract**s.
+As the corner-stone of ditCraft, the smart contracts serve the most important purpose of the implementation. Nameley these are the **KNWToken, KNWVoting and the ditCoordinator**.
 
 ## Working with the project
 This repository contains a truffle v5 project. Feel free to insert your favorite provider into the `truffle-config.js` in order to deploy it. The config is preconfigured to read a 12-word mnemonic from a `.walletsecret` file in the main directory and an infura API key in the form of `v3/<api_key>` in a `.infurakey` file in the same location. In order to get the gist of what happens during the deployment a look into the `migrations/2_main_migration.js` file is suggested.
@@ -15,7 +15,7 @@ Note: *You will need some ETH to interact with the contracts. You can obtain som
 
 ## Contract Description
 ### KNWToken
-The KNWToken is a modified version of the ERC20 token, comparable to the [ERC888 proposal](https://github.com/ethereum/EIPs/issues/888). It has the following external interfaces:
+The KNWToken is a modified version of the ERC20 token, comparable to the [ERC888](https://github.com/ethereum/EIPs/issues/888) or [ERC1155 proposals](https://github.com/ethereum/EIPs/issues/1155). It has the following external interfaces:
 
  - `totalsupply()` 
 	- returns the total count of KNW tokens
@@ -47,29 +47,26 @@ KNWVoting is a highly modified version of the [PLCR Voting scheme by Mike Goldin
 	 -  commits a vote hash\* (this alss triggers the locking of KNW tokens)
  - `revealVote(pollID, address, choice, salt)`
 	 - reveals the committed vote to the public
- - `resolveVote(pollID)`
-	 - resolves the vote, calculated the outcome and returns the reward to the calling contract (also triggers the minting/burning of KNW tokens)
+ - `resolvePoll(pollID)`
+	 - resolves the poll and calculated the outcome 
+-  `resolveVote(pollID, choice, address)`
+	 - resolves the individuals vote and returns the reward to the calling contract (also triggers the minting/burning of KNW tokens)
 
-Note that all of the functions that start or interact with votes can only be called via ditContracts.
+Note that all of the functions that start or interact with votes can only be called by the ditCoordinator.
 \* = The vote is committed with hash = (choice|salt) where choice = {0, 1} and salt = {0, 2^256-1}
 
 ### ditCoordinator
 The ditCoordinator contract is the central piece of this architecture. It has the following external interfaces:
 
- - `getRepository(repository)`
-	 -  returns information about a repository (including the address of its ditContract)
  - `initRepository(repository, knowledge_labels, voteSettings)`
-	 -  creates a ditContract for a new repository with the specified settings
-
-### ditContract
-The ditContracts are the controlling instance for every repository. This is the point of interaction for the users with the repository/votes. It has the following external interfaces:
-
- - `proposeCommit(label)`
-	 -  initiates a new proposal and thus starts a new vote
- - `voteOnProposal(proposalID, voteHash)` (also triggers the locking of KNW tokens)
+	 -  initializes a new repository with the specified settings
+ - `repositoryIsInitialized(repository)`
+	 -  inidicates whether a repository has been initialized
+ - `proposeCommit(repository, label, voteduration)`
+	 -  initiates a new proposal and thus starts a new vote with the specified settings
+ - `voteOnProposal(repository, proposalID, voteHash)` (also triggers the locking of KNW tokens)
 	 -  votes on a proposal with the concealed/hashed vote
- - `openVoteOnProposal(proposalID, choice, salt)`
+ - `openVoteOnProposal(repository, proposalID, choice, salt)`
 	 - opens the concealed vote on a proposal and reveals it to the public
- - `finalizeVote(proposalID)`
+ - `finalizeVote(repository, proposalID)`
 	 finalizes the vote for the individual calling participant and claims the reward for this proposals' vote (also triggers the minting/burning of KNW tokens)
-	 
