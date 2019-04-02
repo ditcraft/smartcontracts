@@ -37,7 +37,6 @@ contract ditCoordinator {
         uint256 maxVoteCommitDuration;
         uint256 minVoteOpenDuration;
         uint256 maxVoteOpenDuration;
-        //mapping (uint256 => commitProposal) proposals;
     }
 
     struct commitProposal {
@@ -65,6 +64,8 @@ contract ditCoordinator {
 
     mapping (bytes32 => ditRepository) public repositories;
     mapping (bytes32 => mapping(uint256 => commitProposal)) public proposalsOfRepository;
+    mapping (address => bool) public isWhitelisted;
+    mapping (address => bool) public isKYCValidator;
 
     event ProposeCommit(bytes32 indexed repository, uint256 indexed proposal, address indexed who, string label);
     event CommitVote(bytes32 indexed repository, uint256 indexed proposal, address indexed who, string label, uint256 stake, uint256 numberOfVotes);
@@ -77,6 +78,22 @@ contract ditCoordinator {
         KNWVote = KNWVotingContract(KNWVotingAddress);
         KNWTokenAddress = _KNWTokenAddress;
         KNWToken = KNWTokenContract(KNWTokenAddress);
+    }
+
+    function addUserToWhitelist(address _address) public onlyKYCValidator(msg.sender) {
+        isWhitelisted[_address] = true;
+    }
+
+    function removeUserFromWhitelist(address _address) public onlyKYCValidator(msg.sender) {
+        isWhitelisted[_address] = false;
+    }
+
+    function addKYCValidator(address _address) public onlyKYCValidator(msg.sender) {
+        isKYCGatekeeper[_address] = true;
+    }
+
+    function removeKYCValidator(address _address) public onlyKYCValidator(msg.sender) {
+        isKYCGatekeeper[_address] = false;
     }
 
     /**
@@ -95,7 +112,7 @@ contract ditCoordinator {
      *  [6] = maxVoteOpenDuration (in seconds)
      * @return True on success
      */
-    function initRepository(bytes32 _repository, string _label1, string _label2, string _label3, uint256[7] _voteSettings) external returns (bool){
+    function initRepository(bytes32 _repository, string _label1, string _label2, string _label3, uint256[7] _voteSettings) external onlyWhitelisted(msg.sender) returns (bool){
         require(_repository != 0, "Repository descriptor can't be zero");
         require(repositories[_repository].votingMajority == 0, "Repository can only be initialized once");
         require(bytes(_label1).length > 0 || bytes(_label2).length > 0 || bytes(_label3).length > 0, "Provide at least one Knowledge Label");
@@ -126,7 +143,7 @@ contract ditCoordinator {
     }
 
     // Proposing a new commit for the repository
-    function proposeCommit(bytes32 _repository, uint256 _knowledgeLabelIndex, uint256 _voteCommitDuration, uint256 _voteOpenDuration) external payable {
+    function proposeCommit(bytes32 _repository, uint256 _knowledgeLabelIndex, uint256 _voteCommitDuration, uint256 _voteOpenDuration) external payable onlyWhitelisted(msg.sender) {
         require(msg.value > 0, "Value of the transaction can not be zero");
         require(bytes(repositories[_repository].knowledgeLabels[_knowledgeLabelIndex]).length > 0, "Knowledge-Label index is not correct");
         require(_voteCommitDuration >= repositories[_repository].minVoteCommitDuration && _voteCommitDuration <= repositories[_repository].maxVoteCommitDuration, "Vote commit duration invalid");
@@ -151,7 +168,7 @@ contract ditCoordinator {
     }
 
     // Casting a vote for a proposed commit
-    function voteOnProposal(bytes32 _repository, uint256 _proposalID, bytes32 _voteHash) public payable {
+    function voteOnProposal(bytes32 _repository, uint256 _proposalID, bytes32 _voteHash) external payable onlyWhitelisted(msg.sender) {
         require(msg.value == proposalsOfRepository[_repository][_proposalID].individualStake, "Value of the transaction doesn't match the required stake");
         require(msg.sender != proposalsOfRepository[_repository][_proposalID].proposer, "The proposer is not allowed to vote in a proposal");
         
@@ -168,7 +185,7 @@ contract ditCoordinator {
     }
 
     // Revealing a vote for a proposed commit
-    function openVoteOnProposal(bytes32 _repository, uint256 _proposalID, uint256 _voteOption, uint256 _voteSalt) external {
+    function openVoteOnProposal(bytes32 _repository, uint256 _proposalID, uint256 _voteOption, uint256 _voteSalt) external onlyWhitelisted(msg.sender) {
         KNWVote.revealVote(proposalsOfRepository[_repository][_proposalID].KNWVoteID, msg.sender, _voteOption, _voteSalt);
         
         // Saving the option of the voter
@@ -178,7 +195,7 @@ contract ditCoordinator {
 
     // Resolving a vote
     // Note: the first caller will automatically resolve the proposal
-    function finalizeVote(bytes32 _repository, uint256 _proposalID) public {
+    function finalizeVote(bytes32 _repository, uint256 _proposalID) external onlyWhitelisted(msg.sender) {
         require(!proposalsOfRepository[_repository][_proposalID].participantDetails[msg.sender].hasFinalized, "Each participant can only finalize once");
         require(proposalsOfRepository[_repository][_proposalID].participantDetails[msg.sender].numberOfVotes > 0 || proposalsOfRepository[_repository][_proposalID].proposer == msg.sender, "Only participants of the vote are able to resolve the vote");
 
@@ -222,5 +239,15 @@ contract ditCoordinator {
 
     function getKNWVoteIDFromProposalID(bytes32 _repository, uint256 _proposalID) external view returns (uint256) {
         return proposalsOfRepository[_repository][_proposalID].KNWVoteID;
+    }
+
+    modifier onlyWhitelisted(address _address) public {
+        require(isWhitelisted[_address]);
+        _;
+    }
+
+    modifier onlyKYCValidator(address _address) public {
+        require(isKYCGatekeeper[_address]);
+        _;
     }
 }
