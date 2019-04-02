@@ -58,6 +58,39 @@ module.exports = {
       skipDryRun: false     // Skip dry run before migrations? (default: false for public nets )
     },
 
+    poa_core: {
+      provider: () => new HDWallet(mnemonic, `https://core.poa.network`, 0, 6),
+      network_id: 99,
+      port: 443,
+      gas: 6000000,
+      gasPrice: 1000000000,
+      confirmations: 0,
+      timeoutBlocks: 50,
+      skipDryRun: false
+    },
+
+    poa_sokol: {
+      provider: () => new HDWallet(mnemonic, `https://sokol.poa.network`, 0, 6),
+      network_id: 77,
+      port: 443,
+      gas: 6000000,
+      gasPrice: 1000000000,
+      confirmations: 0,
+      timeoutBlocks: 50,
+      skipDryRun: false
+    },
+
+    xdai: {
+      provider: () => new HDWallet(mnemonic, `https://dai.poa.network`, 0, 6),
+      network_id: 100,
+      port: 443,
+      gas: 6000000,
+      gasPrice: 1000000000,
+      confirmations: 0,
+      timeoutBlocks: 50,
+      skipDryRun: false
+    },
+
     rinkeby_debug: {
       provider: () => new HDWallet(mnemonic, `http://localhost:9545`, 0, 6),
       network_id: 4,       // Rinkeby's id
