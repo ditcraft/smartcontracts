@@ -89,11 +89,11 @@ contract ditCoordinator {
     }
 
     function addKYCValidator(address _address) public onlyKYCValidator(msg.sender) {
-        isKYCGatekeeper[_address] = true;
+        isKYCValidator[_address] = true;
     }
 
     function removeKYCValidator(address _address) public onlyKYCValidator(msg.sender) {
-        isKYCGatekeeper[_address] = false;
+        isKYCValidator[_address] = false;
     }
 
     /**
@@ -241,13 +241,13 @@ contract ditCoordinator {
         return proposalsOfRepository[_repository][_proposalID].KNWVoteID;
     }
 
-    modifier onlyWhitelisted(address _address) public {
+    modifier onlyWhitelisted(address _address) {
         require(isWhitelisted[_address]);
         _;
     }
 
-    modifier onlyKYCValidator(address _address) public {
-        require(isKYCGatekeeper[_address]);
+    modifier onlyKYCValidator(address _address) {
+        require(isKYCValidator[_address]);
         _;
     }
 }
