@@ -1,6 +1,6 @@
 pragma solidity 0.4.25;
 
-import "./libraries/SafeMath.sol";
+import "../libraries/SafeMath.sol";
 
 interface KNWTokenContract {
     function setVotingAddress(address _newVotingAddress) external;
@@ -17,14 +17,20 @@ interface KNWVotingContract {
     function resolveVote(uint256 _pollID, uint256 _voteOption, address _address) external view returns (uint256 reward);
 }
 
+interface ERC20 {
+    function transfer(address _to, uint256 _value) external returns (bool);
+    function transferFrom(address _from, address _to, uint256 _value) external returns (bool);
+}
+
 /**
- * @title ditCoordinator
+ * @title ditDemoCoordinator
  *
- * @dev Implementation of the ditCoordinator contract, managing dit-enabled
- * repositories. This contract is the point of interaction of the user with
- * the ditCraft ecosystem, as the whole voting process is handled from here.
+ * @dev Implementation of the ditCoordinator contract with ERC20 support, 
+ * managing dit-enabled repositories. This contract is the point of interaction 
+ * of the user with the ditCraft ecosystem, as the whole voting process is 
+ * handled from here.
  */
-contract ditCoordinator {
+contract ditDemoCoordinator {
     using SafeMath for uint256;
     
     struct ditRepository {
@@ -58,9 +64,11 @@ contract ditCoordinator {
 
     address public KNWVotingAddress;
     address public KNWTokenAddress;
+    address public xDitTokenAddress;
 
     KNWVotingContract KNWVote;
     KNWTokenContract KNWToken;
+    ERC20 xDitToken;
 
     mapping (bytes32 => ditRepository) public repositories;
     mapping (bytes32 => mapping(uint256 => commitProposal)) public proposalsOfRepository;
@@ -72,13 +80,15 @@ contract ditCoordinator {
     event OpenVote(bytes32 indexed repository, uint256 indexed proposal, address indexed who, string label, bool accept, uint256 numberOfVotes);
     event FinalizeVote(bytes32 indexed repository, uint256 indexed proposal, string label, bool accepted);
 
-    constructor(address _KNWTokenAddress, address _KNWVotingAddress) public {
+    constructor(address _KNWTokenAddress, address _KNWVotingAddress, address _xDitTokenAddress) public {
         require(_KNWVotingAddress != address(0) && _KNWTokenAddress != address(0), "KNWVoting and KNWToken address can't be empty");
         KNWVotingAddress = _KNWVotingAddress;
         KNWVote = KNWVotingContract(KNWVotingAddress);
         KNWTokenAddress = _KNWTokenAddress;
         KNWToken = KNWTokenContract(KNWTokenAddress);
-
+        xDitTokenAddress = _xDitTokenAddress;
+        xDitToken = ERC20(xDitTokenAddress);
+        
         isKYCValidator[msg.sender] = true;
     }
 
@@ -145,8 +155,8 @@ contract ditCoordinator {
     }
 
     // Proposing a new commit for the repository
-    function proposeCommit(bytes32 _repository, uint256 _knowledgeLabelIndex, uint256 _voteCommitDuration, uint256 _voteOpenDuration) external payable onlyPassedKYC(msg.sender) {
-        require(msg.value > 0, "Value of the transaction can not be zero");
+    function proposeCommit(bytes32 _repository, uint256 _knowledgeLabelIndex, uint256 _voteCommitDuration, uint256 _voteOpenDuration, uint256 _amountOfTokens) external payable onlyPassedKYC(msg.sender) {
+        require(_amountOfTokens > 0, "Amount of tokens can not be zero");
         require(bytes(repositories[_repository].knowledgeLabels[_knowledgeLabelIndex]).length > 0, "Knowledge-Label index is not correct");
         require(_voteCommitDuration >= repositories[_repository].minVoteCommitDuration && _voteCommitDuration <= repositories[_repository].maxVoteCommitDuration, "Vote commit duration invalid");
         require(_voteOpenDuration >= repositories[_repository].minVoteOpenDuration && _voteOpenDuration <= repositories[_repository].maxVoteOpenDuration, "Vote open duration invalid");
@@ -154,28 +164,33 @@ contract ditCoordinator {
 
         // Creating a new proposal
         proposalsOfRepository[_repository][repositories[_repository].currentProposalID] = commitProposal({
-            KNWVoteID: KNWVote.startPoll(_repository, msg.sender, repositories[_repository].knowledgeLabels[_knowledgeLabelIndex], _voteCommitDuration, _voteOpenDuration, msg.value),
+            KNWVoteID: KNWVote.startPoll(_repository, msg.sender, repositories[_repository].knowledgeLabels[_knowledgeLabelIndex], _voteCommitDuration, _voteOpenDuration, _amountOfTokens),
             knowledgeLabel: repositories[_repository].knowledgeLabels[_knowledgeLabelIndex],
             proposer: msg.sender,
             isFinalized: false,
             proposalAccepted: false,
-            individualStake: msg.value,
+            individualStake: _amountOfTokens,
             totalStake: 0
         });
 
+        // Transferring the xDit tokens to the ditCoordinator
+        require(xDitToken.transferFrom(msg.sender, address(this), _amountOfTokens));
+
         // Adding the proposers stake to the total staked amount
-        proposalsOfRepository[_repository][repositories[_repository].currentProposalID].totalStake = proposalsOfRepository[_repository][repositories[_repository].currentProposalID].totalStake.add(msg.value);
+        proposalsOfRepository[_repository][repositories[_repository].currentProposalID].totalStake = proposalsOfRepository[_repository][repositories[_repository].currentProposalID].totalStake.add(_amountOfTokens);
 
         emit ProposeCommit(_repository, repositories[_repository].currentProposalID, msg.sender, repositories[_repository].knowledgeLabels[_knowledgeLabelIndex]);
     }
 
     // Casting a vote for a proposed commit
     function voteOnProposal(bytes32 _repository, uint256 _proposalID, bytes32 _voteHash) external payable onlyPassedKYC(msg.sender) {
-        require(msg.value == proposalsOfRepository[_repository][_proposalID].individualStake, "Value of the transaction doesn't match the required stake");
         require(msg.sender != proposalsOfRepository[_repository][_proposalID].proposer, "The proposer is not allowed to vote in a proposal");
         
+        // Transferring the xDit tokens to the ditCoordinator
+        require(xDitToken.transferFrom(msg.sender, address(this), proposalsOfRepository[_repository][_proposalID].individualStake));
+        
         // Increasing the total stake of this proposal (necessary for security purposes during the payout)
-        proposalsOfRepository[_repository][_proposalID].totalStake = proposalsOfRepository[_repository][_proposalID].totalStake.add(msg.value);
+        proposalsOfRepository[_repository][_proposalID].totalStake = proposalsOfRepository[_repository][_proposalID].totalStake.add(proposalsOfRepository[_repository][_proposalID].individualStake);
 
         // The vote contract returns the number of votes that the voter has in this vote (including the KNW influence)
         uint256 numberOfVotes = KNWVote.commitVote(proposalsOfRepository[_repository][_proposalID].KNWVoteID, msg.sender, _voteHash);
@@ -183,7 +198,7 @@ contract ditCoordinator {
 
         proposalsOfRepository[_repository][_proposalID].participantDetails[msg.sender].numberOfVotes = numberOfVotes;
 
-        emit CommitVote(_repository, _proposalID, msg.sender, proposalsOfRepository[_repository][_proposalID].knowledgeLabel, msg.value, numberOfVotes);
+        emit CommitVote(_repository, _proposalID, msg.sender, proposalsOfRepository[_repository][_proposalID].knowledgeLabel, proposalsOfRepository[_repository][_proposalID].individualStake, numberOfVotes);
     }
 
     // Revealing a vote for a proposed commit
@@ -214,7 +229,7 @@ contract ditCoordinator {
         
         // If the value is greater than zero, it will be transferred to the caller
         if(value > 0) {
-            msg.sender.transfer(value);
+            require(xDitToken.transfer(msg.sender, value));
         }
         
         proposalsOfRepository[_repository][_proposalID].totalStake = proposalsOfRepository[_repository][_proposalID].totalStake.sub(value);

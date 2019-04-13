@@ -1,7 +1,7 @@
 pragma solidity ^0.4.24;
 
 
-import "./libraries/SafeMath.sol";
+import "../libraries/SafeMath.sol";
 
 interface ERC20 {
 	function totalSupply() external view returns (uint256);
