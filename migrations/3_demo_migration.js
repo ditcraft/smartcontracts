@@ -1,7 +1,7 @@
 var KNWToken = artifacts.require("./KNWToken.sol");
 var KNWVoting = artifacts.require("./KNWVoting.sol");
 var ditDemoCoordinator = artifacts.require("./demo_contracts/ditDemoCoordinator.sol");
-var ditToken = artifacts.require("./demo_contracts/ditToken.sol");
+var ditToken = artifacts.require("MintableERC20");
 var SafeMath = artifacts.require("./libraries/SafeMath.sol");
 
 module.exports = async function(deployer) {

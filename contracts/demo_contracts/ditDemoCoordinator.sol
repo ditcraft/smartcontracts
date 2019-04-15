@@ -141,6 +141,9 @@ contract ditDemoCoordinator {
             minVoteOpenDuration: _voteSettings[5],
             maxVoteOpenDuration: _voteSettings[6]
         });
+
+
+        KNWVote.addNewRepository(_repository, _voteSettings[0], _voteSettings[1], _voteSettings[2]);
         
         return true;
     }
