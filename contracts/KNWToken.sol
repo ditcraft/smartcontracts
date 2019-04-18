@@ -28,15 +28,15 @@ contract KNWToken {
     string constant public name = "Knowledge Token";
     uint8 constant public decimals = 18;
 
-    address public votingAddress;
+    mapping (address => bool) public votingContracts;
 
     /**
-     * @dev Sets the address of the voting contract that will be able to access the authorized functions
-     * @param _newVotingAddress The address of the authorized voting contract
+     * @dev Adds an address of a voting contract that will be able to access the authorized functions
+     * @param _newContractAddress An address of a new authorized voting contract
      */
-    function setVotingAddress(address _newVotingAddress) external {
-        require(_newVotingAddress != address(0) && votingAddress == address(0), "KNWVoting address can only be set if it's not empty and hasn't already been set");
-        votingAddress = _newVotingAddress;
+    function addVotingContract(address _newContractAddress) external {
+        require(_newContractAddress != address(0), "Voting contracts' address can only be set if it's not empty");
+        votingContracts[_newContractAddress] = true;
     }
     
     /**
@@ -102,14 +102,11 @@ contract KNWToken {
      * @param _label The label of the free balance that ought to be locked
      * @return A uint256 representing the amount of tokens that has now been locked
      */
-    function lockTokens(address _address, string memory _label) public returns (uint256 numberOfTokens) {
-        require(msg.sender == votingAddress, "Only the KNWVoting contract is allowed to call this");
-        numberOfTokens = 0;
-        if(_balances[_address][_label] > _lockedTokens[_address][_label]) {
-            numberOfTokens = _balances[_address][_label].sub(_lockedTokens[_address][_label]);
-            _lockedTokens[_address][_label] = _lockedTokens[_address][_label].add(numberOfTokens);
-        }
-        return numberOfTokens;
+    function lockTokens(address _address, string memory _label, uint256 _amount) public onlyVotingContracts(msg.sender) returns (bool) {
+        uint256 freeTokens = _balances[_address][_label].sub(_lockedTokens[_address][_label]);
+        require(freeTokens >= _amount, "Can't lock more tokens than available");
+        _lockedTokens[_address][_label] = _lockedTokens[_address][_label].add(_amount);
+        return true;
     }
 
     /**
@@ -119,85 +116,57 @@ contract KNWToken {
      * @param _numberOfTokens The amount of tokens that is requested to be unlocked
      * @return A uint256 representing the amount of tokens that has now been unlocked
      */
-    function unlockTokens(address _address, string _label, uint256 _numberOfTokens) public {
-        require(msg.sender == votingAddress, "Only the KNWVoting contract is allowed to call this");
+    function unlockTokens(address _address, string _label, uint256 _numberOfTokens) public onlyVotingContracts(msg.sender) returns (bool) {
         require(_lockedTokens[_address][_label] <= _balances[_address][_label], "Cant lock more KNW than an address has");
         _lockedTokens[_address][_label] = _lockedTokens[_address][_label].sub(_numberOfTokens);
+        return true;
     }
 
     /**
      * @dev Mints new tokens according to the specified minting method and the winning percentage
      * @param _address The address to receive new KNW tokens
      * @param _label The label that new token will be minted for
-     * @param _winningPercentage The end result of the vote in percent
-     * @param _mintingMethod The method of minting that will be used
+     * @param _amount The amount of tokens to be minted
      */
-    function mint(address _address, string _label, uint256 _winningPercentage, uint256 _mintingMethod) external {
-        require(msg.sender == votingAddress, "Only the KNWVoting contract is allowed to call this");
+    function mint(address _address, string _label, uint256 _amount) external onlyVotingContracts(msg.sender) returns (bool) {
         require(_address != address(0), "Address can't be empty");
         require(bytes(_label).length > 0, "Knowledge-Label can't be empty");
 
-        uint256 mintedKNW = 0;
-        if(_mintingMethod == 0) {
-            // Regular minting:
-            // For votes ending near 100% about 1 KNW will be minted
-            // For votes ending near 50% about 0,0002 KNW will be minted 
-            mintedKNW = _winningPercentage.sub(50).mul(20000000000000000);
-        }
-
-        _totalSupply = _totalSupply.add(mintedKNW);
-        _labelSupply[_label] = _labelSupply[_label].add(mintedKNW);
+        _totalSupply = _totalSupply.add(_amount);
+        _labelSupply[_label] = _labelSupply[_label].add(_amount);
         
         // If the address doesn't have a balance for this label the label will be added to the list
         if(_balances[_address][_label] == 0) {
             _labelCount[_address] = _labelCount[_address].add(1);
             _labels[_address][_labelCount[_address]] = _label;
         }
-        _balances[_address][_label] = _balances[_address][_label].add(mintedKNW);
+        _balances[_address][_label] = _balances[_address][_label].add(_amount);
 
-        emit Mint(_address, _label, mintedKNW);
+        emit Mint(_address, _label, _amount);
+        return true;
     }
 
     /**
      * @dev Burns tokens accoring to the specified burning method and the winning percentage
      * @param _address The address to receive new KNW tokens
      * @param _label The label that new token will be minted for
-     * @param _stakedTokens The amount of tokens that was staked during the vote
-     * @param _winningPercentage The end result of the vote in percent
-     * @param _burningMethod The method of burning that will be used
+     * @param _amount The amount of tokens that will be burned
      */
-    function burn(address _address, string _label, uint256 _stakedTokens, uint256 _winningPercentage, uint256 _burningMethod) external {
-        require(msg.sender == votingAddress, "Only the KNWVoting contract is allowed to call this");
+    function burn(address _address, string _label, uint256 _amount) external onlyVotingContracts(msg.sender) returns (bool) {
         require(_address != address(0), "Address can't be empty");
         require(bytes(_label).length > 0, "Knowledge-Label can't be empty");
-        require(_balances[_address][_label] >= _stakedTokens, "Can't burn more KNW than the address holds");
+        require(_balances[_address][_label] >= _amount, "Can't burn more KNW than the address holds");
 
-        uint256 burnedTokens = _stakedTokens;
-        if(_stakedTokens > 0) {
-            if(_burningMethod == 0) {
-                // Method 1: square-root based
-                uint256 deductedKnwBalance = ((_stakedTokens.div(10**12)).sqrt()).mul(10**15);
-                if(deductedKnwBalance < _stakedTokens) {
-                    burnedTokens = burnedTokens.sub(deductedKnwBalance);
-                } else {
-                    // For balances < 1 (10^18) the sqaure-root would be bigger than the balance due to the nature of square-roots.
-                    // So for balances <= 1 half of the balance will be burned
-                    burnedTokens = burnedTokens.div(2);
-                }
-            } else if(_burningMethod == 1) {
-                // Method 2: each time the token balance will be divded by 2
-                burnedTokens = burnedTokens.div(2);
-            } else if(_burningMethod == 2) {
-                // Method 3: 
-                // For votes ending near 100% nearly 100% of the balance will be burned
-                // For votes ending near 50% nearly 0% of the balance will be burned 
-                uint256 burningPercentage = (_winningPercentage.mul(2)).sub(100);
-                burnedTokens = (burnedTokens.mul(burningPercentage)).div(100);
-            }
-            _totalSupply = _totalSupply.sub(burnedTokens);
-            _labelSupply[_label] = _labelSupply[_label].sub(burnedTokens);
-            _balances[_address][_label] = _balances[_address][_label].sub(burnedTokens);
-            emit Burn(_address, _label, burnedTokens);
-        }
+        _totalSupply = _totalSupply.sub(_amount);
+        _labelSupply[_label] = _labelSupply[_label].sub(_amount);
+        _balances[_address][_label] = _balances[_address][_label].sub(_amount);
+        
+        emit Burn(_address, _label, _amount);
+        return true;
+    }
+
+    modifier onlyVotingContracts(address _address) {
+        require(votingContracts[_address]);
+        _;
     }
 }
