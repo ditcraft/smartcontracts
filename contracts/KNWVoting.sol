@@ -5,10 +5,10 @@ import "./libraries/SafeMath.sol";
 interface KNWTokenContract {
     function balanceOfLabel(address _account, string _label) external view returns (uint256);
     function freeBalanceOfLabel(address _account, string _label) external view returns (uint256);
-    function lockTokens(address _account, string _label) external returns (uint256 numberOfTokens);
-    function unlockTokens(address _account, string _label, uint256 _numberOfTokens) external;
-    function mint(address _account, string _label, uint256 _winningPercentage, uint256 _mintingMethod) external;
-    function burn(address _account, string _label, uint256 _numberOfTokens, uint256 _winningPercentage, uint256 _burningMethod) external;
+    function lockTokens(address _address, string _label, uint256 _amount) external returns (bool);
+    function unlockTokens(address _account, string _label, uint256 _numberOfTokens) external returns (bool);
+    function mint(address _account, string _label, uint256 _amount) external returns (bool);
+    function burn(address _account, string _label, uint256 _amount) external returns (bool);
 }
 
 // originally based on: https://github.com/ConsenSys/PLCRVoting/blob/master/contracts/PLCRVoting.sol
@@ -19,12 +19,12 @@ contract KNWVoting {
         bytes32 repository;             // Initiating ditContract
         string knowledgeLabel;          // Knowledge-Label that will be used
         uint256 commitEndDate;          // End-Timestamp of the commit phase
-        uint256 revealEndDate;          // End-Timestamp of the reveal phase
-        uint256 voteQuorum;             // Percent needed in order to pass
+        uint256 openEndDate;            // End-Timestamp of the reveal phase
+        uint256 neededMajority;         // Percent needed in order to pass
+        uint256 winningPercentage;      // After the vote: percentage of the winning side
         uint256 votesFor;               // Votes in favor of the proposal
         uint256 votesAgainst;           // Votes against the proposal
         uint256 votesUnrevealed;        // Votes that haven't been revealed yet
-        uint256 winningPercentage;      // After the vote: percentage of the winning side
         uint256 participantsFor;        // Participants who votes for the proposal 
         uint256 participantsAgainst;    // Participants who votes against the proposal 
         uint256 participantsUnrevealed; // Participants who haven't revealed their yet
@@ -40,86 +40,108 @@ contract KNWVoting {
     } 
 
     struct Participant {
-        bool didCommit;         // Inidicates whether a participant has commited a vote
-        bool didReveal;         // Inidicates whether a participant has revealed his vote
+        bool didCommitVote;         // Inidicates whether a participant has commited a vote
+        bool didOpenVote;         // Inidicates whether a participant has revealed his vote
         bool isProposer;        // Inidicates whether a participant is the proposer of this vote
-        uint256 numKNW;         // Count of KNW that a participant uses in this vote
-        uint256 numVotes;       // Count of votes that a participant has in this vote
-        uint256 commitHash;     // The hashed vote of a participant
+        uint256 usedKNW;         // Count of KNW that a participant uses in this vote
+        uint256 amountOfVotes;       // Count of votes that a participant has in this vote
+        uint256 voteHash;     // The hashed vote of a participant
     }
 
     // ditContract that are interacting with this contract are stored in this struct
     struct ditRepositorySettings {
-        uint256 burningMethod;
-        uint256 mintingMethod;
         uint256 majority;
     }
 
-    // address of the dit Coordinator Contract
-    address public ditCoordinatorAddress;
+    // addresses of the dit Coordinator Contract(s)
+    mapping(address => bool) public ditCoordinatorContracts;
+
+    // maps the addresses of contracts that are allowed to call this contracts functions
+    mapping (bytes32 => ditRepositorySettings) ditRepositories;
+
+    // address of the dit Manager
+    address internal ditManager;
+
+    // addresses of the last and next contract versions
+    address public lastKNWVoting;
+    address public nextKNWVoting;
 
     // address of the KNWToken Contract
     address public KNWTokenAddress;
 
     // KNWToken Contract
     KNWTokenContract token;
-    
-    // maps the addresses of contracts that are allowed to call this contracts functions
-    mapping (bytes32 => ditRepositorySettings) ditRepositories;
 
-    // nonce of the current poll
-    uint256 constant public INITIAL_POLL_NONCE = 0;
-    uint256 public pollNonce;
+    // used methods for minting and burning (currently standard)
+    uint256 constant public MINTING_METHOD = 0;
+    uint256 constant public BURNING_METHOD = 0;
 
-    // maps pollID to Poll struct
-    mapping(uint256 => KNWVote) public pollMap;
-    mapping(uint256 => Stake) public stakeMap; 
+    // nonce of the current vote
+    uint256 public currentVoteID;
+    uint256 public startingVoteID;
 
-    constructor() public {
-        pollNonce = INITIAL_POLL_NONCE;
-    }
+    // maps voteID to vote struct
+    mapping(uint256 => KNWVote) public votes;
 
-    // Setting the address of the ditCoordinator contract
-    function setCoordinatorAddress(address _newCoordinatorAddress) external {
-        require(_newCoordinatorAddress != address(0) && ditCoordinatorAddress == address(0), "ditCoordinator address can only be set if it's not empty and hasn't already been set");
-        ditCoordinatorAddress = _newCoordinatorAddress;
-    }
+    // maps voteID to stake struct
+    mapping(uint256 => Stake) public stakesOfVote; 
 
-    // Setting the address of the KNWToken contract
-    function setTokenAddress(address _newKNWTokenAddress) external {
-        require(_newKNWTokenAddress != address(0) && KNWTokenAddress == address(0), "KNWToken address can only be set if it's not empty and hasn't already been set");
-        KNWTokenAddress = _newKNWTokenAddress;
+    constructor(address _KNWTokenAddress, address _lastKNWVoting) public {
+        require(_KNWTokenAddress != address(0), "KNWToken address can't be empty");
+        KNWTokenAddress = _KNWTokenAddress;
         token = KNWTokenContract(KNWTokenAddress);
+
+        if(_lastKNWVoting != address(0)) {
+            lastKNWVoting = _lastKNWVoting;
+            KNWVoting lastContract = KNWVoting(lastKNWVoting);
+            currentVoteID = lastContract.currentVoteID();
+        } else {
+            currentVoteID = 0;
+        }
+        startingVoteID = currentVoteID;
+
+        ditManager = msg.sender;
+    }
+
+    function upgradeContract(address _address) public {
+        require(msg.sender == ditManager);
+        require(_address != address(0));
+        nextKNWVoting = _address;
+    }
+
+    function replaceDitManager(address _newManager) public {
+        require(msg.sender == ditManager);
+        require(_newManager != address(0));
+        ditManager = _newManager;
+    }
+
+    // Adding an address of a new ditCoordinator contract
+    function addDitCoordinatorAddress(address _newDitCoordinatorAddress) external {
+        require(msg.sender == ditManager, "Only the ditManager can call this");
+        require(_newDitCoordinatorAddress != address(0), "ditCoordinator address can only be added if it's not empty");
+        ditCoordinatorContracts[_newDitCoordinatorAddress] = true;
     }
 
     // Adding a new ditRepositories address that will be allowed to use this contract    
-    function addNewRepository(bytes32 _newRepository, uint256 _majority, uint256 _mintingMethod, uint256 _burningMethod) external {
-        require(msg.sender == ditCoordinatorAddress, "Only the ditCoordinator can call this");
+    function addNewRepository(bytes32 _newRepository, uint256 _majority) external calledByDitCoordinator(msg.sender) {
         ditRepositories[_newRepository].majority = _majority;
-        ditRepositories[_newRepository].mintingMethod = _mintingMethod;
-        ditRepositories[_newRepository].burningMethod = _burningMethod;
     }
-    
-    // // Removing a ditContract address that won't be allowed to use this contract anymore
-    // function removeDitContract(bytes32 _obsoleteRepository) external {
-    //     require(msg.sender == ditCoordinatorAddress, "Only the ditCoordinator can call this");
-    // }
 
-    // Starts a new poll
-    function startPoll(bytes32 _repository, address _address, string _knowledgeLabel, uint256 _commitDuration, uint256 _revealDuration, uint256 _proposersStake) external calledByDitCoordinator(msg.sender) returns (uint256 pollID) {
-        pollNonce = pollNonce.add(1);
+    // Starts a new vote
+    function startVote(bytes32 _repository, address _address, string _knowledgeLabel, uint256 _commitDuration, uint256 _revealDuration, uint256 _proposersStake, uint256 _KNWAmount) external calledByDitCoordinator(msg.sender) returns (uint256 voteID) {
+        currentVoteID = currentVoteID.add(1);
 
         // Calculating the timestamps for the commit and reveal phase
         uint256 commitEndDate = block.timestamp.add(_commitDuration);
-        uint256 revealEndDate = commitEndDate.add(_revealDuration);
+        uint256 openEndDate = commitEndDate.add(_revealDuration);
 
-        // Creating a new poll
-        pollMap[pollNonce] = KNWVote({
+        // Creating a new vote
+        votes[currentVoteID] = KNWVote({
             repository: _repository,
             knowledgeLabel: _knowledgeLabel,
             commitEndDate: commitEndDate,
-            revealEndDate: revealEndDate,
-            voteQuorum: ditRepositories[_repository].majority,
+            openEndDate: openEndDate,
+            neededMajority: ditRepositories[_repository].majority,
             votesFor: 0,
             votesAgainst: 0,
             votesUnrevealed: 0,
@@ -130,170 +152,170 @@ contract KNWVoting {
             isResolved: false
         });
 
-        stakeMap[pollNonce] = Stake({
+        stakesOfVote[currentVoteID] = Stake({
             proposersStake: _proposersStake,
             proposersReward: 0,
             returnPool: 0,
             rewardPool: 0
         });
         
-        pollMap[pollNonce].participant[_address].isProposer = true;
+        votes[currentVoteID].participant[_address].isProposer = true;
 
         // Locking and storing the amount of KNW that the proposer has for this label
-        uint256 numKNW = token.lockTokens(_address, pollMap[pollNonce].knowledgeLabel);
-        pollMap[pollNonce].participant[_address].numKNW = numKNW;
+        require(token.lockTokens(_address, votes[currentVoteID].knowledgeLabel, _KNWAmount));
+        votes[currentVoteID].participant[_address].usedKNW = _KNWAmount;
         
-        return pollNonce;
+        return currentVoteID;
     }
 
     // Commits a vote using hash of choice and secret salt to conceal vote until reveal
-    function commitVote(uint256 _pollID, address _address, bytes32 _secretHash) external calledByDitCoordinator(msg.sender) returns (uint256 numVotes) {
-        require(_pollID != 0, "pollID can't be zero");
-        require(commitPeriodActive(_pollID), "Commit period has to be active");
-        require(!didCommit(_address, _pollID), "Can't commit more than one vote");
+    function commitVote(uint256 _voteID, address _address, bytes32 _secretHash, uint256 _KNWAmount) external calledByDitCoordinator(msg.sender) returns (uint256 amountOfVotes) {
+        require(_voteID != 0, "voteID can't be zero");
+        require(commitPeriodActive(_voteID), "Commit period has to be active");
+        require(!didCommit(_address, _voteID), "Can't commit more than one vote");
 
         // Preventing participants from committing a secretHash of 0
         require(_secretHash != 0, "Can't vote with a zero hash");
 
         // msg.value of the callers vote transaction was checked in the calling ditContract
-        numVotes = stakeMap[_pollID].proposersStake;
+        amountOfVotes = stakesOfVote[_voteID].proposersStake;
         
         // Returns the amount of free KNWTokens that are now used and locked for this vote
-        uint256 numKNW = token.lockTokens(_address, pollMap[_pollID].knowledgeLabel);
-        pollMap[_pollID].participant[_address].numKNW = numKNW;
+        require(token.lockTokens(_address, votes[_voteID].knowledgeLabel, _KNWAmount));
+        votes[_voteID].participant[_address].usedKNW = _KNWAmount;
 
         // Calculation of vote weight due to KNW influence
         // Vote_Weight = Vote_Weight  + (Vote_Weight * KNW_Balance)
-        // Note: If KNW_Balance is > 1 the square-root of numKNW will be used
+        // Note: If KNW_Balance is > 1 the square-root of usedKNW will be used
         // If KNW_Balance is <= 1 the untouched KNW_Balance will be used
-        uint256 sqrtOfKNW = (numKNW.div(10**12)).sqrt();
-        if(sqrtOfKNW >= numKNW.div(10**15)) {
-            sqrtOfKNW = numKNW.div(10**15);
+        uint256 sqrtOfKNW = (_KNWAmount.div(10**12)).sqrt();
+        if(sqrtOfKNW >= _KNWAmount.div(10**15)) {
+            sqrtOfKNW = _KNWAmount.div(10**15);
         }
-        numVotes = numVotes.add((sqrtOfKNW.mul(numVotes)).div(10**3));
+        amountOfVotes = amountOfVotes.add((sqrtOfKNW.mul(amountOfVotes)).div(10**3));
 
-        pollMap[_pollID].participant[_address].numVotes = numVotes;
-        pollMap[_pollID].participant[_address].commitHash = uint256(_secretHash);
-        pollMap[_pollID].participant[_address].didCommit = true;
+        votes[_voteID].participant[_address].amountOfVotes = amountOfVotes;
+        votes[_voteID].participant[_address].voteHash = uint256(_secretHash);
+        votes[_voteID].participant[_address].didCommitVote = true;
 
         // Adding the number of tokens and votes to the count of unrevealed tokens and votes
-        pollMap[_pollID].votesUnrevealed = pollMap[_pollID].votesUnrevealed.add(numVotes);
-        pollMap[_pollID].participantsUnrevealed = pollMap[_pollID].participantsUnrevealed.add(1);
+        votes[_voteID].votesUnrevealed = votes[_voteID].votesUnrevealed.add(amountOfVotes);
+        votes[_voteID].participantsUnrevealed = votes[_voteID].participantsUnrevealed.add(1);
         
-        return numVotes;
+        return amountOfVotes;
     }
 
-    // Reveals the vote with the option and the salt used to generate the commitHash
-    function revealVote(uint256 _pollID, address _address, uint256 _voteOption, uint256 _salt) external calledByDitCoordinator(msg.sender) {
-        require(revealPeriodActive(_pollID), "Reveal period has to be active");
-        require(pollMap[_pollID].participant[_address].didCommit, "Participant has to have a vote commited");
-        require(!pollMap[_pollID].participant[_address].didReveal, "Can't reveal a vote more than once");
+    // Reveals the vote with the option and the salt used to generate the voteHash
+    function openVote(uint256 _voteID, address _address, uint256 _voteOption, uint256 _salt) external calledByDitCoordinator(msg.sender) {
+        require(openPeriodActive(_voteID), "Reveal period has to be active");
+        require(votes[_voteID].participant[_address].didCommitVote, "Participant has to have a vote commited");
+        require(!votes[_voteID].participant[_address].didOpenVote, "Can't reveal a vote more than once");
 
         // Comparing the commited hash with the one that is calculated from option and salt
-        require(keccak256(abi.encodePacked(_voteOption, _salt)) == bytes32(pollMap[_pollID].participant[_address].commitHash), "Choice and Salt have to be the same as in the votehash");
+        require(keccak256(abi.encodePacked(_voteOption, _salt)) == bytes32(votes[_voteID].participant[_address].voteHash), "Choice and Salt have to be the same as in the votehash");
 
-        uint256 numVotes = pollMap[_pollID].participant[_address].numVotes;
+        uint256 amountOfVotes = votes[_voteID].participant[_address].amountOfVotes;
 
         // remove the participants tokens from the unrevealed tokens
-        pollMap[_pollID].votesUnrevealed = pollMap[_pollID].votesUnrevealed.sub(numVotes);
-        pollMap[_pollID].participantsUnrevealed = pollMap[_pollID].participantsUnrevealed.sub(1);
+        votes[_voteID].votesUnrevealed = votes[_voteID].votesUnrevealed.sub(amountOfVotes);
+        votes[_voteID].participantsUnrevealed = votes[_voteID].participantsUnrevealed.sub(1);
         
         // add the tokens to the according counter
         if (_voteOption == 1) {
-            pollMap[_pollID].votesFor = pollMap[_pollID].votesFor.add(numVotes);
-            pollMap[_pollID].participantsFor = pollMap[_pollID].participantsFor.add(1);
+            votes[_voteID].votesFor = votes[_voteID].votesFor.add(amountOfVotes);
+            votes[_voteID].participantsFor = votes[_voteID].participantsFor.add(1);
         } else {
-            pollMap[_pollID].votesAgainst = pollMap[_pollID].votesAgainst.add(numVotes);
-            pollMap[_pollID].participantsAgainst = pollMap[_pollID].participantsAgainst.add(1);
+            votes[_voteID].votesAgainst = votes[_voteID].votesAgainst.add(amountOfVotes);
+            votes[_voteID].participantsAgainst = votes[_voteID].participantsAgainst.add(1);
         }
 
-        pollMap[_pollID].participant[_address].didReveal = true;
+        votes[_voteID].participant[_address].didOpenVote = true;
     }
 
-    // Resolves a poll and calculates the outcome
-    function resolvePoll(uint256 _pollID) external calledByDitCoordinator(msg.sender) returns (bool votePassed) {
-        require(pollEnded(_pollID), "Poll has to have ended");
+    // Resolves a vote and calculates the outcome
+    function endVote(uint256 _voteID) external calledByDitCoordinator(msg.sender) returns (bool votePassed) {
+        require(voteEnded(_voteID), "Poll has to have ended");
 
-        uint256 totalVotes = pollMap[_pollID].votesFor.add(pollMap[_pollID].votesAgainst);
-        uint256 participants = pollMap[_pollID].participantsAgainst.add(pollMap[_pollID].participantsFor).add(pollMap[_pollID].participantsUnrevealed);
+        uint256 totalVotes = votes[_voteID].votesFor.add(votes[_voteID].votesAgainst);
+        uint256 participants = votes[_voteID].participantsAgainst.add(votes[_voteID].participantsFor).add(votes[_voteID].participantsUnrevealed);
         
         // In case of no participants we define the reward directly to prevent division by zero (participants)
         if(participants == 0) {
-            stakeMap[_pollID].proposersReward = stakeMap[_pollID].proposersStake;
-            pollMap[_pollID].winningPercentage = 0;
-            pollMap[_pollID].isResolved = true;
+            stakesOfVote[_voteID].proposersReward = stakesOfVote[_voteID].proposersStake;
+            votes[_voteID].winningPercentage = 0;
+            votes[_voteID].isResolved = true;
             return false;
         }
 
         // The return pool is the amount of ETH that will be returned to the participants
-        stakeMap[_pollID].returnPool = participants.mul(stakeMap[_pollID].proposersStake.sub((stakeMap[_pollID].proposersStake.div(participants))));
+        stakesOfVote[_voteID].returnPool = participants.mul(stakesOfVote[_voteID].proposersStake.sub((stakesOfVote[_voteID].proposersStake.div(participants))));
 
         uint256 opposingVoters = 0;
-        votePassed = isPassed(_pollID);
+        votePassed = isPassed(_voteID);
 
         if(votePassed) {
             // If the vote passed, the netStake of the opposing and unrevealed voters will be added to the reward pool
-            pollMap[_pollID].winningPercentage = pollMap[_pollID].votesFor.mul(100).div(totalVotes);
-            opposingVoters = pollMap[_pollID].participantsAgainst.add(pollMap[_pollID].participantsUnrevealed);
-            stakeMap[_pollID].proposersReward = stakeMap[_pollID].proposersStake;
+            votes[_voteID].winningPercentage = votes[_voteID].votesFor.mul(100).div(totalVotes);
+            opposingVoters = votes[_voteID].participantsAgainst.add(votes[_voteID].participantsUnrevealed);
+            stakesOfVote[_voteID].proposersReward = stakesOfVote[_voteID].proposersStake;
         } else {
-            if(pollMap[_pollID].votesFor != pollMap[_pollID].votesAgainst) {
+            if(votes[_voteID].votesFor != votes[_voteID].votesAgainst) {
                 // If the vote didn't pass, the netStake of the opposing and unrevealed voters will be added to the reward pool
-                pollMap[_pollID].winningPercentage = pollMap[_pollID].votesAgainst.mul(100).div(totalVotes);
-                opposingVoters = pollMap[_pollID].participantsFor.add(pollMap[_pollID].participantsUnrevealed);
+                votes[_voteID].winningPercentage = votes[_voteID].votesAgainst.mul(100).div(totalVotes);
+                opposingVoters = votes[_voteID].participantsFor.add(votes[_voteID].participantsUnrevealed);
                 
                 // Adding the proposers stake to the reward pool
-                stakeMap[_pollID].rewardPool = stakeMap[_pollID].proposersStake;
+                stakesOfVote[_voteID].rewardPool = stakesOfVote[_voteID].proposersStake;
             } else {
                 // If the vote ended in a draw, the netStake of the unrevealed voters will be added to the reward pool
-                pollMap[_pollID].winningPercentage = 50;                 
-                opposingVoters = pollMap[_pollID].participantsUnrevealed;
-                stakeMap[_pollID].proposersReward = stakeMap[_pollID].proposersStake;
+                votes[_voteID].winningPercentage = 50;                 
+                opposingVoters = votes[_voteID].participantsUnrevealed;
+                stakesOfVote[_voteID].proposersReward = stakesOfVote[_voteID].proposersStake;
             }
         }
         
-        if(stakeMap[_pollID].returnPool > 0) {
-            stakeMap[_pollID].rewardPool = stakeMap[_pollID].rewardPool.add((opposingVoters.mul((stakeMap[_pollID].proposersStake.sub((stakeMap[_pollID].returnPool.div(participants)))))));
+        if(stakesOfVote[_voteID].returnPool > 0) {
+            stakesOfVote[_voteID].rewardPool = stakesOfVote[_voteID].rewardPool.add((opposingVoters.mul((stakesOfVote[_voteID].proposersStake.sub((stakesOfVote[_voteID].returnPool.div(participants)))))));
         }
         
-        pollMap[_pollID].isResolved = true;
+        votes[_voteID].isResolved = true;
         
         // In case of a passed vote or a draw, the proposer will also get a share of the reward
-        if(stakeMap[_pollID].proposersReward > 0) {
-            uint256 winnersReward = stakeMap[_pollID].rewardPool.div(((participants.sub(opposingVoters)).add(1)));
-            stakeMap[_pollID].proposersReward = stakeMap[_pollID].proposersReward.add(winnersReward);
-            stakeMap[_pollID].rewardPool = stakeMap[_pollID].rewardPool.sub(winnersReward);
+        if(stakesOfVote[_voteID].proposersReward > 0) {
+            uint256 winnersReward = stakesOfVote[_voteID].rewardPool.div(((participants.sub(opposingVoters)).add(1)));
+            stakesOfVote[_voteID].proposersReward = stakesOfVote[_voteID].proposersReward.add(winnersReward);
+            stakesOfVote[_voteID].rewardPool = stakesOfVote[_voteID].rewardPool.sub(winnersReward);
         }
         
         return votePassed;
     }
 
     // Calculates the return (and possible reward) for a single participant
-    function calculateStakeReturn(uint256 _pollID, bool _votedForRightOption, bool _refund) internal view returns(uint256) {
-        uint256 participants = pollMap[_pollID].participantsAgainst.add(pollMap[_pollID].participantsFor).add(pollMap[_pollID].participantsUnrevealed);
+    function calculateStakeReturn(uint256 _voteID, bool _votedForRightOption, bool _refund) internal view returns(uint256) {
+        uint256 participants = votes[_voteID].participantsAgainst.add(votes[_voteID].participantsFor).add(votes[_voteID].participantsUnrevealed);
         uint256 totalReturn = 0;
 
         // "refund" is the case when a vote ends in a draw (or noone participates)
         if(!_refund) {
-            uint256 basicReturn = stakeMap[_pollID].returnPool.div(participants);
+            uint256 basicReturn = stakesOfVote[_voteID].returnPool.div(participants);
             totalReturn = basicReturn;
             if(_votedForRightOption) {
                 uint256 likeMindedVoters = 0;
-                if(isPassed(_pollID)) {
-                    likeMindedVoters = pollMap[_pollID].participantsFor;
+                if(isPassed(_voteID)) {
+                    likeMindedVoters = votes[_voteID].participantsFor;
                 } else {
-                    likeMindedVoters = pollMap[_pollID].participantsAgainst;
+                    likeMindedVoters = votes[_voteID].participantsAgainst;
                 }
                 
                 // splitting the total amount between the like-minded voters to calculate the return/reward for the caller
-                totalReturn = (totalReturn.add(getNetStake(_pollID))).add((stakeMap[_pollID].rewardPool.div(likeMindedVoters))); 
+                totalReturn = (totalReturn.add(getNetStake(_voteID))).add((stakesOfVote[_voteID].rewardPool.div(likeMindedVoters))); 
             }
         } else {
             // if the vote ended in a draw (or noone participated)
-            totalReturn = stakeMap[_pollID].proposersStake;
-            if(pollMap[_pollID].participantsUnrevealed > 0 && pollMap[_pollID].participantsUnrevealed < participants) {
+            totalReturn = stakesOfVote[_voteID].proposersStake;
+            if(votes[_voteID].participantsUnrevealed > 0 && votes[_voteID].participantsUnrevealed < participants) {
                 // adding the netStake of unrevealed votes to the reward
-                totalReturn = stakeMap[_pollID].proposersStake.add((pollMap[_pollID].participantsUnrevealed.mul(stakeMap[_pollID].proposersStake)).div((participants.sub(pollMap[_pollID].participantsUnrevealed))));
+                totalReturn = stakesOfVote[_voteID].proposersStake.add((votes[_voteID].participantsUnrevealed.mul(stakesOfVote[_voteID].proposersStake)).div((participants.sub(votes[_voteID].participantsUnrevealed))));
             }
         }
 
@@ -301,48 +323,48 @@ contract KNWVoting {
     }
     
     // Allowing participants who voted according to what the right decision was to claim their "reward" after the vote ended
-    function resolveVote(uint256 _pollID, uint256 _voteOption, address _address) external calledByDitCoordinator(msg.sender) returns (uint256 reward) {
-        KNWVote storage poll = pollMap[_pollID];
+    function finalizeVote(uint256 _voteID, uint256 _voteOption, address _address) external calledByDitCoordinator(msg.sender) returns (uint256 reward) {
+        KNWVote storage vote = votes[_voteID];
         // vote needs to be resolved and only participants who revealed their vote
-        require(poll.isResolved, "Poll has to be resolved");
+        require(vote.isResolved, "Poll has to be resolved");
 
-        if(poll.participant[_address].numKNW > 0) {
-            token.unlockTokens(_address, poll.knowledgeLabel, poll.participant[_address].numKNW);
+        if(vote.participant[_address].usedKNW > 0) {
+            require(token.unlockTokens(_address, vote.knowledgeLabel, vote.participant[_address].usedKNW));
         }
     
-        bool votePassed = isPassed(_pollID);
+        bool votePassed = isPassed(_voteID);
         bool votedRight = (_voteOption == (votePassed ? 1 : 0));
 
-        if(poll.participant[_address].isProposer) {
+        if(vote.participant[_address].isProposer) {
             // the proposer is a special participant that is handled separately
             if(votePassed) {
-                token.mint(_address, poll.knowledgeLabel, poll.winningPercentage, ditRepositories[poll.repository].mintingMethod);
-            } else if(stakeMap[_pollID].proposersReward == 0) {
+                mintKNW(_address, vote.knowledgeLabel, vote.winningPercentage);
+            } else if(stakesOfVote[_voteID].proposersReward == 0) {
                 // proposers reward is only zero if he lost the vote on the proposal, otherwise it was a draw
-                token.burn(_address, poll.knowledgeLabel, poll.participant[_address].numKNW, poll.winningPercentage, ditRepositories[poll.repository].burningMethod);
+                burnKNW(_address, vote.knowledgeLabel, vote.participant[_address].usedKNW, vote.winningPercentage);
             }
-            reward = stakeMap[_pollID].proposersReward;
-        } else if(didReveal(_address, _pollID)) {
+            reward = stakesOfVote[_voteID].proposersReward;
+        } else if(didOpen(_address, _voteID)) {
             // If vote ended 50:50
-            if(!votePassed && poll.votesFor == poll.votesAgainst) {
+            if(!votePassed && vote.votesFor == vote.votesAgainst) {
                 // participants get refunded and unrevealed tokens will be distributed evenly
-                reward = calculateStakeReturn(_pollID, votedRight, true);
+                reward = calculateStakeReturn(_voteID, votedRight, true);
             // If vote ended regularly
             } else {
                 // calculcate the reward (their tokens plus (if they voted right) their share of the tokens of the losing side)
-                reward = calculateStakeReturn(_pollID, votedRight, false);
+                reward = calculateStakeReturn(_voteID, votedRight, false);
                 // participants who voted for the winning option 
                 if(votedRight) {
-                    token.mint(_address, poll.knowledgeLabel, poll.winningPercentage, ditRepositories[poll.repository].mintingMethod);
+                    mintKNW(_address, vote.knowledgeLabel, vote.winningPercentage);
                 // participants who votes for the losing option
                 } else {
-                    token.burn(_address, poll.knowledgeLabel, poll.participant[_address].numKNW, poll.winningPercentage, ditRepositories[poll.repository].burningMethod);
+                    burnKNW(_address, vote.knowledgeLabel, vote.participant[_address].usedKNW, vote.winningPercentage);
                 }
             }
         // participants who didn't reveal but participated are assumed to have voted for the losing option
-        } else if (!didReveal(_address, _pollID) && didCommit(_address, _pollID)){
-            reward = calculateStakeReturn(_pollID, false, false);
-            token.burn(_address, poll.knowledgeLabel, poll.participant[_address].numKNW, poll.winningPercentage, ditRepositories[poll.repository].burningMethod);
+        } else if (!didOpen(_address, _voteID) && didCommit(_address, _voteID)){
+            reward = calculateStakeReturn(_voteID, false, false);
+            burnKNW(_address, vote.knowledgeLabel, vote.participant[_address].usedKNW, vote.winningPercentage);
         // participants who didn't participate at all
         } else {
             revert("Not a participant of the vote");
@@ -351,25 +373,74 @@ contract KNWVoting {
         return reward;
     }
 
-    // Determines if vote has passed
-    function isPassed(uint256 _pollID) public view returns (bool passed) {
-        require(pollEnded(_pollID), "Poll has to have ended");
+    function mintKNW(address _address, string _knowledgeLabel, uint256 _winningPercentage) internal returns(bool) {
+        uint256 tokenAmount = 0;
+        if(MINTING_METHOD == 0) {
+            // Regular minting:
+            // For votes ending near 100% about 1 KNW will be minted
+            // For votes ending near 50% about 0,0002 KNW will be minted 
+            tokenAmount = _winningPercentage.sub(50).mul(20000000000000000);
+        }
 
-        KNWVote memory poll = pollMap[_pollID];
-        return (100 * poll.votesFor) > (poll.voteQuorum * (poll.votesFor + poll.votesAgainst));
+        if(tokenAmount > 0) {
+            require(token.mint(_address, _knowledgeLabel, tokenAmount));
+        }
+
+        return true;
+    }
+
+    function burnKNW(address _address, string _knowledgeLabel, uint256 _stakedTokens, uint256 _winningPercentage) internal returns(bool) {
+        uint256 tokenAmount = 0;
+        // uint256 burnedTokens = _stakedTokens;
+        if(_stakedTokens > 0) {
+            if(BURNING_METHOD == 0) {
+                // Method 1: square-root based
+                uint256 deductedKnwBalance = ((_stakedTokens.div(10**12)).sqrt()).mul(10**15);
+                if(deductedKnwBalance < _stakedTokens) {
+                    tokenAmount = tokenAmount.sub(deductedKnwBalance);
+                } else {
+                    // For balances < 1 (10^18) the sqaure-root would be bigger than the balance due to the nature of square-roots.
+                    // So for balances <= 1 half of the balance will be burned
+                    tokenAmount = tokenAmount.div(2);
+                }
+            } else if(BURNING_METHOD == 1) {
+                // Method 2: each time the token balance will be divded by 2
+                tokenAmount = tokenAmount.div(2);
+            } else if(BURNING_METHOD == 2) {
+                // Method 3: 
+                // For votes ending near 100% nearly 100% of the balance will be burned
+                // For votes ending near 50% nearly 0% of the balance will be burned 
+                uint256 burningPercentage = (_winningPercentage.mul(2)).sub(100);
+                tokenAmount = (tokenAmount.mul(burningPercentage)).div(100);
+            }
+        }
+
+        if(tokenAmount > 0) {
+            require(token.burn(_address, _knowledgeLabel, tokenAmount));
+        }
+
+        return true;
+    }
+
+    // Determines if vote has passed
+    function isPassed(uint256 _voteID) public view returns (bool passed) {
+        require(voteEnded(_voteID), "Poll has to have ended");
+
+        KNWVote memory vote = votes[_voteID];
+        return (100 * vote.votesFor) > (vote.neededMajority * (vote.votesFor + vote.votesAgainst));
     }
     
     // Determines if a vote is resolved
-    function isResolved(uint256 _pollID) public view returns (bool resolved) {
-        return pollMap[_pollID].isResolved;
+    function isResolved(uint256 _voteID) public view returns (bool resolved) {
+        return votes[_voteID].isResolved;
     }
 
     // Voting-Helper functions
     // Determines if vote is over
-    function pollEnded(uint256 _pollID) public view returns (bool ended) {
-        require(pollExists(_pollID), "Poll has to exist");
+    function voteEnded(uint256 _voteID) public view returns (bool ended) {
+        require(voteExists(_voteID), "Poll has to exist");
 
-        return isExpired(pollMap[_pollID].revealEndDate);
+        return isExpired(votes[_voteID].openEndDate);
     }
 
     // Checks if an expiration date has been reached
@@ -378,71 +449,66 @@ contract KNWVoting {
     }
 
     // Checks if the commit period is still active for the specified vote
-    function commitPeriodActive(uint256 _pollID) public view returns (bool active) {
-        require(pollExists(_pollID), "Poll has to exist");
+    function commitPeriodActive(uint256 _voteID) public view returns (bool active) {
+        require(voteExists(_voteID), "Poll has to exist");
 
-        return !isExpired(pollMap[_pollID].commitEndDate);
+        return !isExpired(votes[_voteID].commitEndDate);
     }
 
     // Checks if the reveal period is still active for the specified vote
-    function revealPeriodActive(uint256 _pollID) public view returns (bool active) {
-        require(pollExists(_pollID), "Poll has to exist");
+    function openPeriodActive(uint256 _voteID) public view returns (bool active) {
+        require(voteExists(_voteID), "Poll has to exist");
 
-        return !isExpired(pollMap[_pollID].revealEndDate) && !commitPeriodActive(_pollID);
+        return !isExpired(votes[_voteID].openEndDate) && !commitPeriodActive(_voteID);
     }
 
     // Checks if participant has committed for specified vote
-    function didCommit(address _address, uint256 _pollID) public view returns (bool committed) {
-        require(pollExists(_pollID), "Poll has to exist");
+    function didCommit(address _address, uint256 _voteID) public view returns (bool committed) {
+        require(voteExists(_voteID), "Poll has to exist");
 
-        return pollMap[_pollID].participant[_address].didCommit;
+        return votes[_voteID].participant[_address].didCommitVote;
     }
 
     // Checks if participant has revealed for specified vote
-    function didReveal(address _address, uint256 _pollID) public view returns (bool revealed) {
-        require(pollExists(_pollID), "Poll has to exist");
+    function didOpen(address _address, uint256 _voteID) public view returns (bool revealed) {
+        require(voteExists(_voteID), "Poll has to exist");
 
-        return pollMap[_pollID].participant[_address].didReveal;
+        return votes[_voteID].participant[_address].didOpenVote;
     }
 
     // Checks if a vote exists
-    function pollExists(uint256 _pollID) public view returns (bool exists) {
-        return (_pollID != 0 && _pollID <= pollNonce);
+    function voteExists(uint256 _voteID) public view returns (bool exists) {
+        return (_voteID != 0 && _voteID <= currentVoteID);
     }
 
-    // Returns the gross amount of ETH that a participant currently has to stake for a poll
-    function getGrossStake(uint256 _pollID) public view returns (uint256 grossStake) {
-        return stakeMap[_pollID].proposersStake;
+    // Returns the gross amount of ETH that a participant currently has to stake for a vote
+    function getGrossStake(uint256 _voteID) public view returns (uint256 grossStake) {
+        return stakesOfVote[_voteID].proposersStake;
     }
 
-    // Returns the net amount of ETH that a participant currently has to stake for a poll
-    function getNetStake(uint256 _pollID) public view returns (uint256 netStake) {
-        uint256 participants = pollMap[_pollID].participantsAgainst.add(pollMap[_pollID].participantsFor).add(pollMap[_pollID].participantsUnrevealed);
+    // Returns the net amount of ETH that a participant currently has to stake for a vote
+    function getNetStake(uint256 _voteID) public view returns (uint256 netStake) {
+        uint256 participants = votes[_voteID].participantsAgainst.add(votes[_voteID].participantsFor).add(votes[_voteID].participantsUnrevealed);
         if(participants > 0) {
-            return stakeMap[_pollID].proposersStake.div(participants);
+            return stakesOfVote[_voteID].proposersStake.div(participants);
         }
-        return stakeMap[_pollID].proposersStake;
+        return stakesOfVote[_voteID].proposersStake;
 
     }
 
-    // Returns the number of KNW tokens that a participant used for a poll
-    function getNumKNW(address _address, uint256 _pollID) public view returns (uint256 numKNW) {
-        return pollMap[_pollID].participant[_address].numKNW;
+    // Returns the number of KNW tokens that a participant used for a vote
+    function getUsedKNW(address _address, uint256 _voteID) public view returns (uint256 usedKNW) {
+        return votes[_voteID].participant[_address].usedKNW;
     }
 
-    // Returns the number of votes that a participant has in a poll
-    function getNumVotes(address _address, uint256 _pollID) public view returns (uint256 numVotes) {
-        return pollMap[_pollID].participant[_address].numVotes;
-    }
-
-    // Generates an identifier which associates a participant and a vote together
-    function attrUUID(address _address, uint256 _pollID) internal pure returns (bytes32 UUID) {
-        return keccak256(abi.encodePacked(_address, _pollID));
+    // Returns the number of votes that a participant has in a vote
+    function getAmountOfVotes(address _address, uint256 _voteID) public view returns (uint256 amountOfVotes) {
+        return votes[_voteID].participant[_address].amountOfVotes;
     }
     
     // Modifier: function can only be called by a listed dit contract
     modifier calledByDitCoordinator (address _address) {
-        require(ditCoordinatorAddress == _address, "Only the ditCoordinator is allow to call this");
+        require(ditCoordinatorContracts[_address], "Only a ditCoordinator is allow to call this");
         _;
     }
 }
