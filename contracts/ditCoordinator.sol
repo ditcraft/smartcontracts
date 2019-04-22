@@ -7,14 +7,12 @@ interface KNWTokenContract {
 }
 
 interface KNWVotingContract {
-    function setCoordinatorAddress(address _newCoordinatorAddress) external;
-    function setTokenAddress(address _newKNWTokenAddress) external;
-    function addNewRepository(bytes32 _newRepository, uint256 _majority) external;
-    function startVote(bytes32 _repository, address _address, string _knowledgeLabel, uint256 _commitDuration, uint256 _revealDuration, uint256 _proposersStake) external returns (uint256 voteID);
-    function commitVote(uint256 _voteID, address _address, bytes32 _secretHash) external returns (uint256 numVotes);
-    function openVote(uint256 _voteID, address _address, uint256 _voteOption, uint256 _salt) external;
+    function addNewRepository(bytes32 _newRepository, uint256 _majority) external returns (bool);
+    function startVote(bytes32 _repository, address _address, string _knowledgeLabel, uint256 _commitDuration, uint256 _revealDuration, uint256 _proposersStake, uint256 _KNWAmount) external returns (uint256 voteID);
+    function commitVote(uint256 _voteID, address _address, bytes32 _secretHash, uint256 _KNWAmount) external returns (uint256 amountOfVotes);
+    function openVote(uint256 _voteID, address _address, uint256 _voteOption, uint256 _salt) external returns (bool);
     function endVote(uint256 _voteID) external returns (bool votePassed);
-    function finalizeVote(uint256 _voteID, uint256 _voteOption, address _address) external view returns (uint256 reward);
+    function finalizeVote(uint256 _voteID, uint256 _voteOption, address _address) external returns (uint256 reward, bool winningSide, uint256 amountOfKNW);
 }
 
 /**
@@ -46,6 +44,7 @@ contract ditCoordinator {
 
     struct voterDetails {
         uint256 numberOfVotes;
+        uint256 numberOfKNW;
         uint256 choice;
         bool hasFinalized;
     }
@@ -74,10 +73,11 @@ contract ditCoordinator {
     mapping (address => bool) public passedKYC;
     mapping (address => bool) public isKYCValidator;
 
-    event ProposeCommit(bytes32 indexed repository, uint256 indexed proposal, address indexed who, string label);
-    event CommitVote(bytes32 indexed repository, uint256 indexed proposal, address indexed who, string label, uint256 stake, uint256 numberOfVotes);
+    event ProposeCommit(bytes32 indexed repository, uint256 indexed proposal, address indexed who, string label, uint256 numberOfKNW);
+    event CommitVote(bytes32 indexed repository, uint256 indexed proposal, address indexed who, string label, uint256 stake, uint256 numberOfKNW, uint256 numberOfVotes);
     event OpenVote(bytes32 indexed repository, uint256 indexed proposal, address indexed who, string label, bool accept, uint256 numberOfVotes);
-    event FinalizeVote(bytes32 indexed repository, uint256 indexed proposal, string label, bool accepted);
+    event FinalizeVote(bytes32 indexed repository, uint256 indexed proposal, address indexed who, string label, bool votedRight, uint256 numberOfKNW);
+    event FinalizeProposal(bytes32 indexed repository, uint256 indexed proposal, string label, bool accepted);
 
     constructor(address _KNWTokenAddress, address _KNWVotingAddress, address _lastDitCoordinator) public {
         require(_KNWVotingAddress != address(0) && _KNWTokenAddress != address(0), "KNWVoting and KNWToken address can't be empty");
@@ -180,7 +180,7 @@ contract ditCoordinator {
     }
 
     // Proposing a new commit for the repository
-    function proposeCommit(bytes32 _repository, uint256 _knowledgeLabelIndex, uint256 _voteCommitDuration, uint256 _voteOpenDuration) external payable onlyPassedKYC(msg.sender) {
+    function proposeCommit(bytes32 _repository, uint256 _knowledgeLabelIndex, uint256 _numberOfKNW, uint256 _voteCommitDuration, uint256 _voteOpenDuration) external payable onlyPassedKYC(msg.sender) {
         require(msg.value > 0, "Value of the transaction can not be zero");
         require(bytes(repositories[_repository].knowledgeLabels[_knowledgeLabelIndex]).length > 0, "Knowledge-Label index is not correct");
         require(_voteCommitDuration >= MIN_VOTE_DURATION && _voteCommitDuration <= MAX_VOTE_DURATION, "Vote commit duration invalid");
@@ -190,7 +190,7 @@ contract ditCoordinator {
 
         // Creating a new proposal
         proposalsOfRepository[_repository][repositories[_repository].currentProposalID] = commitProposal({
-            KNWVoteID: KNWVote.startVote(_repository, msg.sender, repositories[_repository].knowledgeLabels[_knowledgeLabelIndex], _voteCommitDuration, _voteOpenDuration, msg.value),
+            KNWVoteID: KNWVote.startVote(_repository, msg.sender, repositories[_repository].knowledgeLabels[_knowledgeLabelIndex], _voteCommitDuration, _voteOpenDuration, msg.value, _numberOfKNW),
             knowledgeLabel: repositories[_repository].knowledgeLabels[_knowledgeLabelIndex],
             proposer: msg.sender,
             isFinalized: false,
@@ -199,11 +199,11 @@ contract ditCoordinator {
             totalStake: msg.value
         });
 
-        emit ProposeCommit(_repository, repositories[_repository].currentProposalID, msg.sender, repositories[_repository].knowledgeLabels[_knowledgeLabelIndex]);
+        emit ProposeCommit(_repository, repositories[_repository].currentProposalID, msg.sender, repositories[_repository].knowledgeLabels[_knowledgeLabelIndex], _numberOfKNW);
     }
 
     // Casting a vote for a proposed commit
-    function voteOnProposal(bytes32 _repository, uint256 _proposalID, bytes32 _voteHash) external payable onlyPassedKYC(msg.sender) {
+    function voteOnProposal(bytes32 _repository, uint256 _proposalID, bytes32 _voteHash, uint256 _numberOfKNW) external payable onlyPassedKYC(msg.sender) {
         require(msg.value == proposalsOfRepository[_repository][_proposalID].individualStake, "Value of the transaction doesn't match the required stake");
         require(msg.sender != proposalsOfRepository[_repository][_proposalID].proposer, "The proposer is not allowed to vote in a proposal");
         
@@ -211,12 +211,12 @@ contract ditCoordinator {
         proposalsOfRepository[_repository][_proposalID].totalStake = proposalsOfRepository[_repository][_proposalID].totalStake.add(msg.value);
 
         // The vote contract returns the number of votes that the voter has in this vote (including the KNW influence)
-        uint256 numberOfVotes = KNWVote.commitVote(proposalsOfRepository[_repository][_proposalID].KNWVoteID, msg.sender, _voteHash);
+        uint256 numberOfVotes = KNWVote.commitVote(proposalsOfRepository[_repository][_proposalID].KNWVoteID, msg.sender, _voteHash, _numberOfKNW);
         require(numberOfVotes > 0, "Voting contract returned an invalid amount of votes");
 
         proposalsOfRepository[_repository][_proposalID].participantDetails[msg.sender].numberOfVotes = numberOfVotes;
 
-        emit CommitVote(_repository, _proposalID, msg.sender, proposalsOfRepository[_repository][_proposalID].knowledgeLabel, msg.value, numberOfVotes);
+        emit CommitVote(_repository, _proposalID, msg.sender, proposalsOfRepository[_repository][_proposalID].knowledgeLabel, msg.value, _numberOfKNW, numberOfVotes);
     }
 
     // Revealing a vote for a proposed commit
@@ -239,11 +239,11 @@ contract ditCoordinator {
             proposalsOfRepository[_repository][_proposalID].proposalAccepted = KNWVote.endVote(proposalsOfRepository[_repository][_proposalID].KNWVoteID);
             proposalsOfRepository[_repository][_proposalID].isFinalized = true;
 
-            emit FinalizeVote(_repository, _proposalID, proposalsOfRepository[_repository][_proposalID].knowledgeLabel, proposalsOfRepository[_repository][_proposalID].proposalAccepted);
+            emit FinalizeProposal(_repository, _proposalID, proposalsOfRepository[_repository][_proposalID].knowledgeLabel, proposalsOfRepository[_repository][_proposalID].proposalAccepted);
         }
         
         // The vote contract returns the amount of ETH that the participant will receive
-        uint256 value = KNWVote.finalizeVote(proposalsOfRepository[_repository][_proposalID].KNWVoteID, proposalsOfRepository[_repository][_proposalID].participantDetails[msg.sender].choice, msg.sender);
+        (uint256 value, bool votedRight, uint256 numberOfKNW) = KNWVote.finalizeVote(proposalsOfRepository[_repository][_proposalID].KNWVoteID, proposalsOfRepository[_repository][_proposalID].participantDetails[msg.sender].choice, msg.sender);
         
         // If the value is greater than zero, it will be transferred to the caller
         if(value > 0) {
@@ -252,6 +252,8 @@ contract ditCoordinator {
         
         proposalsOfRepository[_repository][_proposalID].totalStake = proposalsOfRepository[_repository][_proposalID].totalStake.sub(value);
         proposalsOfRepository[_repository][_proposalID].participantDetails[msg.sender].hasFinalized = true;
+     
+        emit FinalizeVote(_repository, _proposalID, msg.sender, proposalsOfRepository[_repository][_proposalID].knowledgeLabel, votedRight, numberOfKNW);
     }
 
     function getIndividualStake(bytes32 _repository, uint256 _proposalID) external view returns (uint256 individualStake) {

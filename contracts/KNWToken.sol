@@ -34,7 +34,7 @@ contract KNWToken {
      * @dev Adds an address of a voting contract that will be able to access the authorized functions
      * @param _newContractAddress An address of a new authorized voting contract
      */
-    function addVotingContract(address _newContractAddress) external {
+    function addVotingContract(address _newContractAddress) external returns (bool) {
         require(_newContractAddress != address(0), "Voting contracts' address can only be set if it's not empty");
         votingContracts[_newContractAddress] = true;
     }
@@ -43,7 +43,7 @@ contract KNWToken {
      * @dev Total number of tokens for all labels
      * @return A uint256 representing the total token amount
      */
-    function totalSupply() public view returns (uint256) {
+    function totalSupply() external view returns (uint256) {
         return _totalSupply;
     }
 
@@ -52,7 +52,7 @@ contract KNWToken {
      * @param _label The label of the tokens
      * @return A uint256 representing the token amount for this label
      */
-    function totalLabelSupply(string memory _label) public view returns (uint256) {
+    function totalLabelSupply(string _label) external view returns (uint256) {
         return _labelSupply[_label];
     }
 
@@ -62,7 +62,7 @@ contract KNWToken {
      * @param _label The label of the requested balance
      * @return A uint256 representing the amount owned be the passed address for the specified label
      */
-    function balanceOfLabel(address _address, string memory _label) public view returns (uint256) {
+    function balanceOfLabel(address _address, string _label) external view returns (uint256) {
         return _balances[_address][_label];
     }
 
@@ -72,7 +72,7 @@ contract KNWToken {
      * @param _label The label of the requested free balance
      * @return A uint256 representing the non-locked amount owned be the passed address for the specified label
      */
-    function freeBalanceOfLabel(address _address, string memory _label) public view returns (uint256) {
+    function freeBalanceOfLabel(address _address, string _label) external view returns (uint256) {
         return _balances[_address][_label].sub(_lockedTokens[_address][_label]);
     }
 
@@ -82,7 +82,7 @@ contract KNWToken {
      * @param _labelID The id of the label
      * @return The label (string)
      */
-    function labelOfAddress(address _address, uint256 _labelID) public view returns (string memory) {
+    function labelOfAddress(address _address, uint256 _labelID) external view returns (string memory) {
         return _labels[_address][_labelID];
     }
 
@@ -91,7 +91,7 @@ contract KNWToken {
      * @param _address The address to query the label count
      * @return A uint256 representing the aount of labels that an address hat
      */
-    function labelCountOfAddress(address _address) public view returns (uint256) {
+    function labelCountOfAddress(address _address) external view returns (uint256) {
         return _labelCount[_address];
     }
 
@@ -102,7 +102,7 @@ contract KNWToken {
      * @param _label The label of the free balance that ought to be locked
      * @return A uint256 representing the amount of tokens that has now been locked
      */
-    function lockTokens(address _address, string memory _label, uint256 _amount) public onlyVotingContracts(msg.sender) returns (bool) {
+    function lockTokens(address _address, string _label, uint256 _amount) external onlyVotingContracts(msg.sender) returns (bool) {
         uint256 freeTokens = _balances[_address][_label].sub(_lockedTokens[_address][_label]);
         require(freeTokens >= _amount, "Can't lock more tokens than available");
         _lockedTokens[_address][_label] = _lockedTokens[_address][_label].add(_amount);
@@ -116,7 +116,7 @@ contract KNWToken {
      * @param _numberOfTokens The amount of tokens that is requested to be unlocked
      * @return A uint256 representing the amount of tokens that has now been unlocked
      */
-    function unlockTokens(address _address, string _label, uint256 _numberOfTokens) public onlyVotingContracts(msg.sender) returns (bool) {
+    function unlockTokens(address _address, string _label, uint256 _numberOfTokens) external onlyVotingContracts(msg.sender) returns (bool) {
         require(_lockedTokens[_address][_label] <= _balances[_address][_label], "Cant lock more KNW than an address has");
         _lockedTokens[_address][_label] = _lockedTokens[_address][_label].sub(_numberOfTokens);
         return true;
