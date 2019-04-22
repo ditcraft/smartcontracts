@@ -7,10 +7,10 @@ interface KNWTokenContract {
 }
 
 interface KNWVotingContract {
-    function addNewRepository(bytes32 _newRepository, uint256 _majority) external returns (bool);
-    function startVote(bytes32 _repository, address _address, string _knowledgeLabel, uint256 _commitDuration, uint256 _revealDuration, uint256 _proposersStake, uint256 _KNWAmount) external returns (uint256 voteID);
-    function commitVote(uint256 _voteID, address _address, bytes32 _secretHash, uint256 _KNWAmount) external returns (uint256 amountOfVotes);
-    function openVote(uint256 _voteID, address _address, uint256 _voteOption, uint256 _salt) external returns (bool);
+    function addNewRepository(bytes32 _newRepository, uint256 _majority) external returns (bool success);
+    function startVote(bytes32 _repository, address _address, string _knowledgeLabel, uint256 _commitDuration, uint256 _revealDuration, uint256 _proposersStake, uint256 _numberOfKNW) external returns (uint256 voteID);
+    function commitVote(uint256 _voteID, address _address, bytes32 _secretHash, uint256 _numberOfKNW) external returns (uint256 amountOfVotes);
+    function openVote(uint256 _voteID, address _address, uint256 _voteOption, uint256 _salt) external returns (bool success);
     function endVote(uint256 _voteID) external returns (bool votePassed);
     function finalizeVote(uint256 _voteID, uint256 _voteOption, address _address) external returns (uint256 reward, bool winningSide, uint256 amountOfKNW);
 }
@@ -92,32 +92,38 @@ contract ditCoordinator {
         ditManager = msg.sender;
     }
 
-    function upgradeContract(address _address) public {
+    function upgradeContract(address _address) external returns (bool) {
         require(msg.sender == ditManager);
         require(_address != address(0));
         nextDitCoordinator = _address;
+        return true;
     }
 
-    function replaceDitManager(address _newManager) public {
+    function replaceDitManager(address _newManager) external returns (bool) {
         require(msg.sender == ditManager);
         require(_newManager != address(0));
         ditManager = _newManager;
+        return true;
     }
 
-    function passKYC(address _address) public onlyKYCValidator(msg.sender) {
+    function passKYC(address _address) external onlyKYCValidator(msg.sender) returns (bool) {
         passedKYC[_address] = true;
+        return true;
     }
 
-    function revokeKYC(address _address) public onlyKYCValidator(msg.sender) {
+    function revokeKYC(address _address) external onlyKYCValidator(msg.sender) returns (bool) {
         passedKYC[_address] = false;
+        return true;
     }
 
-    function addKYCValidator(address _address) public onlyKYCValidator(msg.sender) {
+    function addKYCValidator(address _address) external onlyKYCValidator(msg.sender) returns (bool) {
         isKYCValidator[_address] = true;
+        return true;
     }
 
-    function removeKYCValidator(address _address) public onlyKYCValidator(msg.sender) {
+    function removeKYCValidator(address _address) external onlyKYCValidator(msg.sender) returns (bool) {
         isKYCValidator[_address] = false;
+        return true;
     }
 
     /**
@@ -180,7 +186,7 @@ contract ditCoordinator {
     }
 
     // Proposing a new commit for the repository
-    function proposeCommit(bytes32 _repository, uint256 _knowledgeLabelIndex, uint256 _numberOfKNW, uint256 _voteCommitDuration, uint256 _voteOpenDuration) external payable onlyPassedKYC(msg.sender) {
+    function proposeCommit(bytes32 _repository, uint256 _knowledgeLabelIndex, uint256 _numberOfKNW, uint256 _voteCommitDuration, uint256 _voteOpenDuration) external payable onlyPassedKYC(msg.sender) returns (uint256 proposalID) {
         require(msg.value > 0, "Value of the transaction can not be zero");
         require(bytes(repositories[_repository].knowledgeLabels[_knowledgeLabelIndex]).length > 0, "Knowledge-Label index is not correct");
         require(_voteCommitDuration >= MIN_VOTE_DURATION && _voteCommitDuration <= MAX_VOTE_DURATION, "Vote commit duration invalid");
@@ -200,10 +206,12 @@ contract ditCoordinator {
         });
 
         emit ProposeCommit(_repository, repositories[_repository].currentProposalID, msg.sender, repositories[_repository].knowledgeLabels[_knowledgeLabelIndex], _numberOfKNW);
+        
+        return repositories[_repository].currentProposalID;
     }
 
     // Casting a vote for a proposed commit
-    function voteOnProposal(bytes32 _repository, uint256 _proposalID, bytes32 _voteHash, uint256 _numberOfKNW) external payable onlyPassedKYC(msg.sender) {
+    function voteOnProposal(bytes32 _repository, uint256 _proposalID, bytes32 _voteHash, uint256 _numberOfKNW) external payable onlyPassedKYC(msg.sender) returns (bool) {
         require(msg.value == proposalsOfRepository[_repository][_proposalID].individualStake, "Value of the transaction doesn't match the required stake");
         require(msg.sender != proposalsOfRepository[_repository][_proposalID].proposer, "The proposer is not allowed to vote in a proposal");
         
@@ -217,20 +225,24 @@ contract ditCoordinator {
         proposalsOfRepository[_repository][_proposalID].participantDetails[msg.sender].numberOfVotes = numberOfVotes;
 
         emit CommitVote(_repository, _proposalID, msg.sender, proposalsOfRepository[_repository][_proposalID].knowledgeLabel, msg.value, _numberOfKNW, numberOfVotes);
+
+        return true;
     }
 
     // Revealing a vote for a proposed commit
-    function openVoteOnProposal(bytes32 _repository, uint256 _proposalID, uint256 _voteOption, uint256 _voteSalt) external onlyPassedKYC(msg.sender) {
+    function openVoteOnProposal(bytes32 _repository, uint256 _proposalID, uint256 _voteOption, uint256 _voteSalt) external onlyPassedKYC(msg.sender) returns (bool) {
         KNWVote.openVote(proposalsOfRepository[_repository][_proposalID].KNWVoteID, msg.sender, _voteOption, _voteSalt);
         
         // Saving the option of the voter
         proposalsOfRepository[_repository][_proposalID].participantDetails[msg.sender].choice = _voteOption;
         emit OpenVote(_repository, _proposalID, msg.sender, proposalsOfRepository[_repository][_proposalID].knowledgeLabel, (_voteOption == 1), proposalsOfRepository[_repository][_proposalID].participantDetails[msg.sender].numberOfVotes);
+
+        return true;
     }
 
     // Resolving a vote
     // Note: the first caller will automatically resolve the proposal
-    function finalizeVote(bytes32 _repository, uint256 _proposalID) external onlyPassedKYC(msg.sender) {
+    function finalizeVote(bytes32 _repository, uint256 _proposalID) external onlyPassedKYC(msg.sender) returns (bool) {
         require(!proposalsOfRepository[_repository][_proposalID].participantDetails[msg.sender].hasFinalized, "Each participant can only finalize once");
         require(proposalsOfRepository[_repository][_proposalID].participantDetails[msg.sender].numberOfVotes > 0 || proposalsOfRepository[_repository][_proposalID].proposer == msg.sender, "Only participants of the vote are able to resolve the vote");
 
@@ -254,6 +266,8 @@ contract ditCoordinator {
         proposalsOfRepository[_repository][_proposalID].participantDetails[msg.sender].hasFinalized = true;
      
         emit FinalizeVote(_repository, _proposalID, msg.sender, proposalsOfRepository[_repository][_proposalID].knowledgeLabel, votedRight, numberOfKNW);
+
+        return true;
     }
 
     function getIndividualStake(bytes32 _repository, uint256 _proposalID) external view returns (uint256 individualStake) {
@@ -270,15 +284,15 @@ contract ditCoordinator {
         return repositories[_repository].knowledgeLabels[_knowledgeLabelID];
     }
 
-    function getVotingMajority(bytes32 _repository) external view returns (uint256) {
+    function getVotingMajority(bytes32 _repository) external view returns (uint256 votingMajority) {
         return repositories[_repository].votingMajority;
     }
 
-    function getCurrentProposalID(bytes32 _repository) external view returns (uint256) {
+    function getCurrentProposalID(bytes32 _repository) external view returns (uint256 currentProposalID) {
         return repositories[_repository].currentProposalID;
     }
 
-    function getKNWVoteIDFromProposalID(bytes32 _repository, uint256 _proposalID) external view returns (uint256) {
+    function getKNWVoteIDFromProposalID(bytes32 _repository, uint256 _proposalID) external view returns (uint256 KNWVoteID) {
         return proposalsOfRepository[_repository][_proposalID].KNWVoteID;
     }
 

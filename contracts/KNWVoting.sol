@@ -3,12 +3,12 @@ pragma solidity 0.4.25;
 import "./libraries/SafeMath.sol";
 
 interface KNWTokenContract {
-    function balanceOfLabel(address _account, string _label) external view returns (uint256);
-    function freeBalanceOfLabel(address _account, string _label) external view returns (uint256);
-    function lockTokens(address _address, string _label, uint256 _amount) external returns (bool);
-    function unlockTokens(address _account, string _label, uint256 _numberOfTokens) external returns (bool);
-    function mint(address _account, string _label, uint256 _amount) external returns (bool);
-    function burn(address _account, string _label, uint256 _amount) external returns (bool);
+    function balanceOfLabel(address _account, string _label) external view returns (uint256 balance);
+    function freeBalanceOfLabel(address _account, string _label) external view returns (uint256 freeBalance);
+    function lockTokens(address _address, string _label, uint256 _amount) external returns (bool success);
+    function unlockTokens(address _account, string _label, uint256 _numberOfTokens) external returns (bool success);
+    function mint(address _account, string _label, uint256 _amount) external returns (bool success);
+    function burn(address _account, string _label, uint256 _amount) external returns (bool success);
 }
 
 // originally based on: https://github.com/ConsenSys/PLCRVoting/blob/master/contracts/PLCRVoting.sol
@@ -44,7 +44,7 @@ contract KNWVoting {
         bool didOpenVote;       // Inidicates whether a participant has revealed his vote
         bool isProposer;        // Inidicates whether a participant is the proposer of this vote
         uint256 usedKNW;        // Count of KNW that a participant uses in this vote
-        uint256 amountOfVotes;  // Count of votes that a participant has in this vote
+        uint256 numberOfVotes;  // Count of votes that a participant has in this vote
         uint256 voteHash;       // The hashed vote of a participant
     }
 
@@ -103,14 +103,14 @@ contract KNWVoting {
         ditManager = msg.sender;
     }
 
-    function upgradeContract(address _address) external returns (bool) {
+    function upgradeContract(address _address) external returns (bool success) {
         require(msg.sender == ditManager);
         require(_address != address(0));
         nextKNWVoting = _address;
         return true;
     }
 
-    function replaceDitManager(address _newManager) external returns (bool) {
+    function replaceDitManager(address _newManager) external returns (bool success) {
         require(msg.sender == ditManager);
         require(_newManager != address(0));
         ditManager = _newManager;
@@ -118,19 +118,21 @@ contract KNWVoting {
     }
 
     // Adding an address of a new ditCoordinator contract
-    function addDitCoordinator(address _newDitCoordinatorAddress) external returns (bool) {
+    function addDitCoordinator(address _newDitCoordinatorAddress) external returns (bool success) {
         require(msg.sender == ditManager, "Only the ditManager can call this");
         require(_newDitCoordinatorAddress != address(0), "ditCoordinator address can only be added if it's not empty");
         ditCoordinatorContracts[_newDitCoordinatorAddress] = true;
+        return true;
     }
 
     // Adding a new ditRepositories address that will be allowed to use this contract    
-    function addNewRepository(bytes32 _newRepository, uint256 _majority) external calledByDitCoordinator(msg.sender) returns (bool) {
+    function addNewRepository(bytes32 _newRepository, uint256 _majority) external calledByDitCoordinator(msg.sender) returns (bool success) {
         ditRepositories[_newRepository].majority = _majority;
+        return true;
     }
 
     // Starts a new vote
-    function startVote(bytes32 _repository, address _address, string _knowledgeLabel, uint256 _commitDuration, uint256 _revealDuration, uint256 _proposersStake, uint256 _KNWAmount) external calledByDitCoordinator(msg.sender) returns (uint256 voteID) {
+    function startVote(bytes32 _repository, address _address, string _knowledgeLabel, uint256 _commitDuration, uint256 _revealDuration, uint256 _proposersStake, uint256 _numberOfKNW) external calledByDitCoordinator(msg.sender) returns (uint256 voteID) {
         currentVoteID = currentVoteID.add(1);
 
         // Calculating the timestamps for the commit and reveal phase
@@ -164,14 +166,14 @@ contract KNWVoting {
         votes[currentVoteID].participant[_address].isProposer = true;
 
         // Locking and storing the amount of KNW that the proposer has for this label
-        require(token.lockTokens(_address, votes[currentVoteID].knowledgeLabel, _KNWAmount));
-        votes[currentVoteID].participant[_address].usedKNW = _KNWAmount;
+        require(token.lockTokens(_address, votes[currentVoteID].knowledgeLabel, _numberOfKNW));
+        votes[currentVoteID].participant[_address].usedKNW = _numberOfKNW;
         
         return currentVoteID;
     }
 
     // Commits a vote using hash of choice and secret salt to conceal vote until reveal
-    function commitVote(uint256 _voteID, address _address, bytes32 _secretHash, uint256 _KNWAmount) external calledByDitCoordinator(msg.sender) returns (uint256 amountOfVotes) {
+    function commitVote(uint256 _voteID, address _address, bytes32 _secretHash, uint256 _numberOfKNW) external calledByDitCoordinator(msg.sender) returns (uint256 numberOfVotes) {
         require(_voteID != 0, "voteID can't be zero");
         require(commitPeriodActive(_voteID), "Commit period has to be active");
         require(!didCommit(_address, _voteID), "Can't commit more than one vote");
@@ -180,35 +182,35 @@ contract KNWVoting {
         require(_secretHash != 0, "Can't vote with a zero hash");
 
         // msg.value of the callers vote transaction was checked in the calling ditContract
-        amountOfVotes = stakesOfVote[_voteID].proposersStake;
+        numberOfVotes = stakesOfVote[_voteID].proposersStake;
         
         // Returns the amount of free KNWTokens that are now used and locked for this vote
-        require(token.lockTokens(_address, votes[_voteID].knowledgeLabel, _KNWAmount));
-        votes[_voteID].participant[_address].usedKNW = _KNWAmount;
+        require(token.lockTokens(_address, votes[_voteID].knowledgeLabel, _numberOfKNW));
+        votes[_voteID].participant[_address].usedKNW = _numberOfKNW;
 
         // Calculation of vote weight due to KNW influence
         // Vote_Weight = Vote_Weight  + (Vote_Weight * KNW_Balance)
         // Note: If KNW_Balance is > 1 the square-root of usedKNW will be used
         // If KNW_Balance is <= 1 the untouched KNW_Balance will be used
-        uint256 sqrtOfKNW = (_KNWAmount.div(10**12)).sqrt();
-        if(sqrtOfKNW >= _KNWAmount.div(10**15)) {
-            sqrtOfKNW = _KNWAmount.div(10**15);
+        uint256 sqrtOfKNW = (_numberOfKNW.div(10**12)).sqrt();
+        if(sqrtOfKNW >= _numberOfKNW.div(10**15)) {
+            sqrtOfKNW = _numberOfKNW.div(10**15);
         }
-        amountOfVotes = amountOfVotes.add((sqrtOfKNW.mul(amountOfVotes)).div(10**3));
+        numberOfVotes = numberOfVotes.add((sqrtOfKNW.mul(numberOfVotes)).div(10**3));
 
-        votes[_voteID].participant[_address].amountOfVotes = amountOfVotes;
+        votes[_voteID].participant[_address].numberOfVotes = numberOfVotes;
         votes[_voteID].participant[_address].voteHash = uint256(_secretHash);
         votes[_voteID].participant[_address].didCommitVote = true;
 
         // Adding the number of tokens and votes to the count of unrevealed tokens and votes
-        votes[_voteID].votesUnrevealed = votes[_voteID].votesUnrevealed.add(amountOfVotes);
+        votes[_voteID].votesUnrevealed = votes[_voteID].votesUnrevealed.add(numberOfVotes);
         votes[_voteID].participantsUnrevealed = votes[_voteID].participantsUnrevealed.add(1);
         
-        return amountOfVotes;
+        return numberOfVotes;
     }
 
     // Reveals the vote with the option and the salt used to generate the voteHash
-    function openVote(uint256 _voteID, address _address, uint256 _voteOption, uint256 _salt) external calledByDitCoordinator(msg.sender) returns (bool) {
+    function openVote(uint256 _voteID, address _address, uint256 _voteOption, uint256 _salt) external calledByDitCoordinator(msg.sender) returns (bool success) {
         require(openPeriodActive(_voteID), "Reveal period has to be active");
         require(votes[_voteID].participant[_address].didCommitVote, "Participant has to have a vote commited");
         require(!votes[_voteID].participant[_address].didOpenVote, "Can't reveal a vote more than once");
@@ -216,18 +218,18 @@ contract KNWVoting {
         // Comparing the commited hash with the one that is calculated from option and salt
         require(keccak256(abi.encodePacked(_voteOption, _salt)) == bytes32(votes[_voteID].participant[_address].voteHash), "Choice and Salt have to be the same as in the votehash");
 
-        uint256 amountOfVotes = votes[_voteID].participant[_address].amountOfVotes;
+        uint256 numberOfVotes = votes[_voteID].participant[_address].numberOfVotes;
 
         // remove the participants tokens from the unrevealed tokens
-        votes[_voteID].votesUnrevealed = votes[_voteID].votesUnrevealed.sub(amountOfVotes);
+        votes[_voteID].votesUnrevealed = votes[_voteID].votesUnrevealed.sub(numberOfVotes);
         votes[_voteID].participantsUnrevealed = votes[_voteID].participantsUnrevealed.sub(1);
         
         // add the tokens to the according counter
         if (_voteOption == 1) {
-            votes[_voteID].votesFor = votes[_voteID].votesFor.add(amountOfVotes);
+            votes[_voteID].votesFor = votes[_voteID].votesFor.add(numberOfVotes);
             votes[_voteID].participantsFor = votes[_voteID].participantsFor.add(1);
         } else {
-            votes[_voteID].votesAgainst = votes[_voteID].votesAgainst.add(amountOfVotes);
+            votes[_voteID].votesAgainst = votes[_voteID].votesAgainst.add(numberOfVotes);
             votes[_voteID].participantsAgainst = votes[_voteID].participantsAgainst.add(1);
         }
 
@@ -327,7 +329,7 @@ contract KNWVoting {
     }
     
     // Allowing participants who voted according to what the right decision was to claim their "reward" after the vote ended
-    function finalizeVote(uint256 _voteID, uint256 _voteOption, address _address) external calledByDitCoordinator(msg.sender) returns (uint256 reward, bool winningSide, uint256 amountOfKNW) {
+    function finalizeVote(uint256 _voteID, uint256 _voteOption, address _address) external calledByDitCoordinator(msg.sender) returns (uint256 reward, bool winningSide, uint256 numberOfKNW) {
         KNWVote storage vote = votes[_voteID];
         // vote needs to be resolved and only participants who revealed their vote
         require(vote.isResolved, "Poll has to be resolved");
@@ -342,10 +344,10 @@ contract KNWVoting {
         if(vote.participant[_address].isProposer) {
             // the proposer is a special participant that is handled separately
             if(votePassed) {
-                amountOfKNW = mintKNW(_address, vote.knowledgeLabel, vote.winningPercentage);
+                numberOfKNW = mintKNW(_address, vote.knowledgeLabel, vote.winningPercentage);
             } else if(stakesOfVote[_voteID].proposersReward == 0) {
                 // proposers reward is only zero if he lost the vote on the proposal, otherwise it was a draw
-                amountOfKNW = burnKNW(_address, vote.knowledgeLabel, vote.participant[_address].usedKNW, vote.winningPercentage);
+                numberOfKNW = burnKNW(_address, vote.knowledgeLabel, vote.participant[_address].usedKNW, vote.winningPercentage);
             }
             reward = stakesOfVote[_voteID].proposersReward;
         } else if(didOpen(_address, _voteID)) {
@@ -359,25 +361,25 @@ contract KNWVoting {
                 reward = calculateStakeReturn(_voteID, votedRight, false);
                 // participants who voted for the winning option 
                 if(votedRight) {
-                    amountOfKNW = mintKNW(_address, vote.knowledgeLabel, vote.winningPercentage);
+                    numberOfKNW = mintKNW(_address, vote.knowledgeLabel, vote.winningPercentage);
                 // participants who votes for the losing option
                 } else {
-                    amountOfKNW = burnKNW(_address, vote.knowledgeLabel, vote.participant[_address].usedKNW, vote.winningPercentage);
+                    numberOfKNW = burnKNW(_address, vote.knowledgeLabel, vote.participant[_address].usedKNW, vote.winningPercentage);
                 }
             }
         // participants who didn't reveal but participated are assumed to have voted for the losing option
         } else if (!didOpen(_address, _voteID) && didCommit(_address, _voteID)){
             reward = calculateStakeReturn(_voteID, false, false);
-            amountOfKNW = burnKNW(_address, vote.knowledgeLabel, vote.participant[_address].usedKNW, vote.winningPercentage);
+            numberOfKNW = burnKNW(_address, vote.knowledgeLabel, vote.participant[_address].usedKNW, vote.winningPercentage);
         // participants who didn't participate at all
         } else {
             revert("Not a participant of the vote");
         }
 
-        return (reward, votedRight, amountOfKNW);
+        return (reward, votedRight, numberOfKNW);
     }
 
-    function mintKNW(address _address, string _knowledgeLabel, uint256 _winningPercentage) internal returns (uint256 amountOfKNW) {
+    function mintKNW(address _address, string _knowledgeLabel, uint256 _winningPercentage) internal returns (uint256 numberOfKNW) {
         uint256 tokenAmount = 0;
         if(MINTING_METHOD == 0) {
             // Regular minting:
@@ -393,7 +395,7 @@ contract KNWVoting {
         return tokenAmount;
     }
 
-    function burnKNW(address _address, string _knowledgeLabel, uint256 _stakedTokens, uint256 _winningPercentage) internal returns (uint256 amountOfKNW) {
+    function burnKNW(address _address, string _knowledgeLabel, uint256 _stakedTokens, uint256 _winningPercentage) internal returns (uint256 numberOfKNW) {
         uint256 tokenAmount = 0;
         // uint256 burnedTokens = _stakedTokens;
         if(_stakedTokens > 0) {
@@ -506,8 +508,8 @@ contract KNWVoting {
     }
 
     // Returns the number of votes that a participant has in a vote
-    function getAmountOfVotes(address _address, uint256 _voteID) public view returns (uint256 amountOfVotes) {
-        return votes[_voteID].participant[_address].amountOfVotes;
+    function getAmountOfVotes(address _address, uint256 _voteID) public view returns (uint256 numberOfVotes) {
+        return votes[_voteID].participant[_address].numberOfVotes;
     }
     
     // Modifier: function can only be called by a listed dit contract
