@@ -17,9 +17,11 @@ contract KNWToken {
     event Burn(address indexed who, string label, uint256 value);
 
     mapping (address => mapping (string => uint256)) private _balances;
-    mapping (address => mapping (string => uint256)) private _lockedTokens;
+    mapping (address => mapping (string => uint256)) private _lockedBalances;
+
     mapping (address => mapping (uint256 => string)) private _labels;
     mapping (address => uint256) private _labelCount;
+    mapping (address => mapping (string => bool)) private _usedLabel;
 
     uint256 private _totalSupply;
     mapping (string => uint256) private _labelSupply;
@@ -32,11 +34,11 @@ contract KNWToken {
 
     /**
      * @dev Adds an address of a voting contract that will be able to access the authorized functions
-     * @param _newContractAddress An address of a new authorized voting contract
+     * @param _contractAddress An address of a new authorized voting contract
      */
-    function addVotingContract(address _newContractAddress) external returns (bool success) {
-        require(_newContractAddress != address(0), "Voting contracts' address can only be set if it's not empty");
-        votingContracts[_newContractAddress] = true;
+    function addVotingContract(address _contractAddress) external returns (bool success) {
+        require(_contractAddress != address(0), "Voting contracts' address can't be empty");
+        votingContracts[_contractAddress] = true;
         return true;
     }
     
@@ -74,7 +76,7 @@ contract KNWToken {
      * @return A uint256 representing the non-locked amount owned be the passed address for the specified label
      */
     function freeBalanceOfLabel(address _address, string _label) external view returns (uint256 freeBalance) {
-        return _balances[_address][_label].sub(_lockedTokens[_address][_label]);
+        return _balances[_address][_label].sub(_lockedBalances[_address][_label]);
     }
 
     /**
@@ -104,9 +106,9 @@ contract KNWToken {
      * @return A uint256 representing the amount of tokens that has now been locked
      */
     function lockTokens(address _address, string _label, uint256 _amount) external onlyVotingContracts(msg.sender) returns (bool success) {
-        uint256 freeTokens = _balances[_address][_label].sub(_lockedTokens[_address][_label]);
+        uint256 freeTokens = _balances[_address][_label].sub(_lockedBalances[_address][_label]);
         require(freeTokens >= _amount, "Can't lock more tokens than available");
-        _lockedTokens[_address][_label] = _lockedTokens[_address][_label].add(_amount);
+        _lockedBalances[_address][_label] = _lockedBalances[_address][_label].add(_amount);
         return true;
     }
 
@@ -118,8 +120,8 @@ contract KNWToken {
      * @return A uint256 representing the amount of tokens that has now been unlocked
      */
     function unlockTokens(address _address, string _label, uint256 _numberOfTokens) external onlyVotingContracts(msg.sender) returns (bool success) {
-        require(_lockedTokens[_address][_label] <= _balances[_address][_label], "Cant lock more KNW than an address has");
-        _lockedTokens[_address][_label] = _lockedTokens[_address][_label].sub(_numberOfTokens);
+        require(_lockedBalances[_address][_label] <= _balances[_address][_label], "Cant lock more KNW than an address has");
+        _lockedBalances[_address][_label] = _lockedBalances[_address][_label].sub(_numberOfTokens);
         return true;
     }
 
@@ -135,13 +137,14 @@ contract KNWToken {
 
         _totalSupply = _totalSupply.add(_amount);
         _labelSupply[_label] = _labelSupply[_label].add(_amount);
+        _balances[_address][_label] = _balances[_address][_label].add(_amount);
         
-        // If the address doesn't have a balance for this label the label will be added to the list
-        if(_balances[_address][_label] == 0) {
+        // If the address hasn't used this label before, this label will be added to the list
+        if(!_usedLabel[_address][_label]) {
             _labelCount[_address] = _labelCount[_address].add(1);
             _labels[_address][_labelCount[_address]] = _label;
+            _usedLabel[_address][_label] = true;
         }
-        _balances[_address][_label] = _balances[_address][_label].add(_amount);
 
         emit Mint(_address, _label, _amount);
         return true;
