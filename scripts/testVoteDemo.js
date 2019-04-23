@@ -1,6 +1,7 @@
 const KNWToken = artifacts.require("KNWToken");
+const ditToken = artifacts.require("MintableERC20");
 const KNWVoting = artifacts.require("KNWVoting");
-const ditCoordinator = artifacts.require("ditCoordinator");
+const ditDemoCoordinator = artifacts.require("ditDemoCoordinator");
 
 module.exports = async function(callback) {
     console.log("------ start ------");
@@ -65,9 +66,10 @@ module.exports = async function(callback) {
     console.log("Hash: " + repoName)
 
     // Instances
-    let ditCoordinatorInstance = await ditCoordinator.deployed();
+    let ditCoordinatorInstance = await ditDemoCoordinator.deployed();
     let KNWVotingInstance = await KNWVoting.deployed();
     let KNWTokenInstance = await KNWToken.deployed();
+    let ditTokenInstance = await ditToken.deployed();
 
     let passedKYC = await ditCoordinatorInstance.passedKYC(accounts[0])
     if(!passedKYC) {
@@ -76,6 +78,18 @@ module.exports = async function(callback) {
         }
         console.log("Passed KYC for all accounts")
     }
+
+    for(var i = 0; i < 6; i++) { 
+        let ditTokenBalance = await ditTokenInstance.allowance(accounts[i], ditCoordinatorInstance.address)
+        if(Number(web3.utils.fromWei(ditTokenBalance, 'ether')) < 50) {   
+            await ditTokenInstance.mint(accounts[i], web3.utils.toWei("100", 'ether'), {from: accounts[0]})
+            let newBalance = await ditTokenInstance.balanceOf(accounts[i])
+            await ditTokenInstance.approve(ditCoordinatorInstance.address, newBalance, {from: accounts[i]})
+            console.log("Minted and approved xDit for account " + i)
+        }
+    }  
+
+
     // Creating a new repository
     if(!no_new) {
         await ditCoordinatorInstance.initRepository(repoName, label1, label2, label3, voteMajority, {from: accounts[0]});
@@ -84,17 +98,18 @@ module.exports = async function(callback) {
 
     console.log("------ addresses ------");
     console.log("Coordinator: " + ditCoordinatorInstance.address);
+    console.log("ditToken: " + ditTokenInstance.address);
     console.log("KNWToken: " + KNWTokenInstance.address);
     console.log("KNWVoting: " + KNWVotingInstance.address);
     console.log("------ vote starts ------");
 
     // Proposing a commit
-    let randomEthValue = (Math.random() * 0.01 + 0.001);
+    let randomEthValue = (Math.random() * 15 + 1);
     let USED_STAKE =  web3.utils.toWei(randomEthValue.toString(), 'ether');
-    console.log("Stake will be " + randomEthValue + " ETH")
+    console.log("Stake will be " + randomEthValue + " xDit")
     
     let freeKNWBalance = await KNWTokenInstance.freeBalanceOfLabel(accounts[0], label1);
-    await ditCoordinatorInstance.proposeCommit(repoName, 0, freeKNWBalance, 60, 60, {from: accounts[0], value: USED_STAKE});
+    await ditCoordinatorInstance.proposeCommit(repoName, 0, freeKNWBalance, 60, 60, USED_STAKE.toString(10), {from: accounts[0]});
     
     console.log("proposed commit")
 
@@ -113,7 +128,7 @@ module.exports = async function(callback) {
             proposalID, 
             web3.utils.keccak256(web3.eth.abi.encodeParameters(['uint256','uint256'], [choices[i], salts[i]])),
             freeKNWBalance,
-            {from: accounts[i], value: USED_STAKE})
+            {from: accounts[i]})
     }
 
     // Watiing for the votes
@@ -205,7 +220,7 @@ module.exports = async function(callback) {
     // Retrieving the ETH balance (for checking whether a claim happend or not)
     let ethBalanceBefore = []
     for(var i = 0; i <= 5; i++) {
-        ethBalanceBefore.push((await web3.eth.getBalance(accounts[i])).toString(10));
+        ethBalanceBefore.push((await ditTokenInstance.balanceOf(accounts[i])).toString(10));
     }
 
     // Claiming the reward
@@ -221,7 +236,7 @@ module.exports = async function(callback) {
         let success = false;
         for(var i = 0; i < 6; i++) {
             // If balance changed a transaction was executed successfully
-            let balance = (await web3.eth.getBalance(accounts[i])).toString(10);
+            let balance = (await ditTokenInstance.balanceOf(accounts[i])).toString(10);
             if(balance != ethBalanceBefore[i]) { 
                 success = true; 
             } else {
@@ -251,7 +266,7 @@ module.exports = async function(callback) {
         let knwBefore = web3.utils.fromWei(knwBalanceBefore[i]);
         let knwAfter = web3.utils.fromWei(knwBalanceAfter[i]);
         console.log("[" + i + "] Stake of " + 
-        stake + " ETH resulted in " + 
+        stake + " xDit resulted in " + 
         votes + " numVotes (" + 
         (votes/stake).toFixed(3) + " times increased). KNW Balance from " + 
         parseFloat(knwBefore).toFixed(3) + " to " + 
