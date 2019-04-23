@@ -5,7 +5,7 @@ import "./libraries/SafeMath.sol";
 interface KNWTokenContract {
     function balanceOfLabel(address _account, string _label) external view returns (uint256 balance);
     function freeBalanceOfLabel(address _account, string _label) external view returns (uint256 freeBalance);
-    function lockTokens(address _address, string _label, uint256 _amount) external returns (bool success);
+    function lockTokens(address _account, string _label, uint256 _amount) external returns (bool success);
     function unlockTokens(address _account, string _label, uint256 _numberOfTokens) external returns (bool success);
     function mint(address _account, string _label, uint256 _amount) external returns (bool success);
     function burn(address _account, string _label, uint256 _amount) external returns (bool success);
@@ -403,21 +403,21 @@ contract KNWVoting {
                 // Method 1: square-root based
                 uint256 deductedKnwBalance = ((_stakedTokens.div(10**12)).sqrt()).mul(10**15);
                 if(deductedKnwBalance < _stakedTokens) {
-                    tokenAmount = tokenAmount.sub(deductedKnwBalance);
+                    tokenAmount = _stakedTokens.sub(deductedKnwBalance);
                 } else {
                     // For balances < 1 (10^18) the sqaure-root would be bigger than the balance due to the nature of square-roots.
                     // So for balances <= 1 half of the balance will be burned
-                    tokenAmount = tokenAmount.div(2);
+                    tokenAmount = _stakedTokens.div(2);
                 }
             } else if(BURNING_METHOD == 1) {
                 // Method 2: each time the token balance will be divded by 2
-                tokenAmount = tokenAmount.div(2);
+                tokenAmount = _stakedTokens.div(2);
             } else if(BURNING_METHOD == 2) {
                 // Method 3: 
                 // For votes ending near 100% nearly 100% of the balance will be burned
                 // For votes ending near 50% nearly 0% of the balance will be burned 
                 uint256 burningPercentage = (_winningPercentage.mul(2)).sub(100);
-                tokenAmount = (tokenAmount.mul(burningPercentage)).div(100);
+                tokenAmount = (_stakedTokens.mul(burningPercentage)).div(100);
             }
         }
 
