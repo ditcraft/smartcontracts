@@ -11,7 +11,13 @@ interface KNWTokenContract {
     function burn(address _account, string _label, uint256 _amount) external returns (bool success);
 }
 
-// originally based on: https://github.com/ConsenSys/PLCRVoting/blob/master/contracts/PLCRVoting.sol
+/**
+ * @title Knowledge-extractable voting
+ *
+ * @dev Implementation of the knowledge-extractable voting contract. It handles votes on yay/nay topics
+ * and uses KNW tokens to further assign weight to the individuals opinion based on his/her knowledge
+ * token balance.
+ */
 contract KNWVoting {
     using SafeMath for uint;
 
@@ -48,12 +54,13 @@ contract KNWVoting {
         uint256 voteHash;       // The hashed vote of a participant
     }
 
-    // ditContract that are interacting with this contract are stored in this struct
+    // repositories that are interacting with this contract are stored in this struct
+    // with their corresponding settings
     struct ditRepositorySettings {
         uint256 majority;
     }
 
-    // addresses of the dit Coordinator Contract(s)
+    // addresses of the dit Coordinator contract(s)
     mapping(address => bool) public ditCoordinatorContracts;
 
     // maps the addresses of contracts that are allowed to call this contracts functions
@@ -78,12 +85,14 @@ contract KNWVoting {
 
     // nonce of the current vote
     uint256 public currentVoteID;
+
+    // nonce of the first vote that is being handles by this contract
     uint256 public startingVoteID;
 
-    // maps voteID to vote struct
+    // maps a voteID to the vote struct
     mapping(uint256 => KNWVote) public votes;
 
-    // maps voteID to stake struct
+    // maps a voteID to its stake struct
     mapping(uint256 => Stake) public stakesOfVote; 
 
     constructor(address _KNWTokenAddress, address _lastKNWVoting) public {

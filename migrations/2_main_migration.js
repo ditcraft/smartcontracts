@@ -16,7 +16,7 @@ module.exports = async function(deployer) {
   await deployer.deploy(ditCoordinator, KNWToken.address, KNWVoting.address, lastDitCoordinator);
   console.log("\n   Post-Deployment Calls")
   console.log("   ----------------------");
-  await tokenInstance.addVotingContract(KNWVoting.address);
+  await tokenInstance.authorizeAddress(KNWVoting.address);
   console.log("   > Post-Deployment Call 1/2 done");
   await votingInstance.addDitCoordinator(ditCoordinator.address);
   console.log("   > Post-Deployment Call 2/2 done\n");

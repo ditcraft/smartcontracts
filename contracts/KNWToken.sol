@@ -30,15 +30,31 @@ contract KNWToken {
     string constant public name = "Knowledge Token";
     uint8 constant public decimals = 18;
 
-    mapping (address => bool) public votingContracts;
+    mapping (address => bool) public authorizedAddresses;
+
+    constructor() public {
+        authorizedAddresses[msg.sender] = true;
+    }
 
     /**
-     * @dev Adds an address of a voting contract that will be able to access the authorized functions
-     * @param _contractAddress An address of a new authorized voting contract
+     * @dev Adds an address that will be able to access the authorized functions
+     * @param _address An address of a new authorized voting contract
      */
-    function addVotingContract(address _contractAddress) external returns (bool success) {
-        require(_contractAddress != address(0), "Voting contracts' address can't be empty");
-        votingContracts[_contractAddress] = true;
+    function authorizeAddress(address _address) external returns (bool success) {
+        require(_address != address(0), "Authorized contracts' address can't be empty");
+        require(authorizedAddresses[msg.sender], "Only authorized addresses can do this");
+        authorizedAddresses[_address] = true;
+        return true;
+    }
+
+    /**
+     * @dev Removes an address that will be able to access the authorized functions
+     * @param _address An address of a new authorized voting contract
+     */
+    function removeAddress(address _address) external returns (bool success) {
+        require(_address != address(0), "Authorized contracts' address can't be empty");
+        require(authorizedAddresses[msg.sender], "Only authorized addresses can do this");
+        authorizedAddresses[_address] = false;
         return true;
     }
     
@@ -99,13 +115,13 @@ contract KNWToken {
     }
 
     /**
-     * @dev Locks the non-locked amount of tokens for an address at a certain
-     * label and returns this amount
+     * @dev Locks a non-locked amount of tokens for an address at a certain label
      * @param _address The address to lock the free balance of
      * @param _label The label of the free balance that ought to be locked
-     * @return A uint256 representing the amount of tokens that has now been locked
+     * @param _amount The amount of tokens that ought to be locked
+     * @return A boolean that indicates if the operation was successful
      */
-    function lockTokens(address _address, string _label, uint256 _amount) external onlyVotingContracts(msg.sender) returns (bool success) {
+    function lockTokens(address _address, string _label, uint256 _amount) external onlyAuthorizedAddress(msg.sender) returns (bool success) {
         uint256 freeTokens = _balances[_address][_label].sub(_lockedBalances[_address][_label]);
         require(freeTokens >= _amount, "Can't lock more tokens than available");
         _lockedBalances[_address][_label] = _lockedBalances[_address][_label].add(_amount);
@@ -116,12 +132,12 @@ contract KNWToken {
      * @dev Unlocks the specified amount of tokens
      * @param _address The address to unlock a certain balance of
      * @param _label The label of the amount that ought to be unlocked
-     * @param _numberOfTokens The amount of tokens that is requested to be unlocked
-     * @return A uint256 representing the amount of tokens that has now been unlocked
+     * @param _amount The amount of tokens that is requested to be unlocked
+     * @return A boolean that indicates if the operation was successful
      */
-    function unlockTokens(address _address, string _label, uint256 _numberOfTokens) external onlyVotingContracts(msg.sender) returns (bool success) {
+    function unlockTokens(address _address, string _label, uint256 _amount) external onlyAuthorizedAddress(msg.sender) returns (bool success) {
         require(_lockedBalances[_address][_label] <= _balances[_address][_label], "Cant lock more KNW than an address has");
-        _lockedBalances[_address][_label] = _lockedBalances[_address][_label].sub(_numberOfTokens);
+        _lockedBalances[_address][_label] = _lockedBalances[_address][_label].sub(_amount);
         return true;
     }
 
@@ -130,8 +146,9 @@ contract KNWToken {
      * @param _address The address to receive new KNW tokens
      * @param _label The label that new token will be minted for
      * @param _amount The amount of tokens to be minted
+     * @return A boolean that indicates if the operation was successful
      */
-    function mint(address _address, string _label, uint256 _amount) external onlyVotingContracts(msg.sender) returns (bool success) {
+    function mint(address _address, string _label, uint256 _amount) external onlyAuthorizedAddress(msg.sender) returns (bool success) {
         require(_address != address(0), "Address can't be empty");
         require(bytes(_label).length > 0, "Knowledge-Label can't be empty");
 
@@ -155,8 +172,9 @@ contract KNWToken {
      * @param _address The address to receive new KNW tokens
      * @param _label The label that new token will be minted for
      * @param _amount The amount of tokens that will be burned
+     * @return A boolean that indicates if the operation was successful
      */
-    function burn(address _address, string _label, uint256 _amount) external onlyVotingContracts(msg.sender) returns (bool success) {
+    function burn(address _address, string _label, uint256 _amount) external onlyAuthorizedAddress(msg.sender) returns (bool success) {
         require(_address != address(0), "Address can't be empty");
         require(bytes(_label).length > 0, "Knowledge-Label can't be empty");
         require(_balances[_address][_label] >= _amount, "Can't burn more KNW than the address holds");
@@ -169,8 +187,8 @@ contract KNWToken {
         return true;
     }
 
-    modifier onlyVotingContracts(address _address) {
-        require(votingContracts[_address]);
+    modifier onlyAuthorizedAddress(address _address) {
+        require(authorizedAddresses[_address]);
         _;
     }
 }
