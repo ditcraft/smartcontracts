@@ -2,22 +2,20 @@
 As the corner-stone of ditCraft, the smart contracts serve the most important purpose of the implementation. Nameley these are the **KNWToken, KNWVoting and the ditCoordinator**.
 
 ## Working with the project
-This repository contains a truffle v5 project. Feel free to insert your favorite provider into the `truffle-config.js` in order to deploy it. The config is preconfigured to read a 12-word mnemonic from a `.walletsecret` file in the main directory and an infura API key in the form of `v3/<api_key>` in a `.infurakey` file in the same location. In order to get the gist of what happens during the deployment a look into the `migrations/2_main_migration.js` file is suggested.
+This repository contains a truffle v5 project. Feel free to insert your favorite provider into the `truffle-config.js` in order to deploy it. The config is preconfigured to read a 12-word mnemonic from a `.walletsecret` file in the main directory. In order to get the gist of what happens during the deployment a look into the `migrations/2_main_migration.js` file is suggested.
 
 ## Deployed Contracts
-The contracts are currently deployed on the [PoA Network Sokol testnet](https://blockscout.com/poa/sokol) for development and testing purposes. Since we have a live and a demo mode of the client, the smart contracts of these modes are working separately.
-
-Note: *You will need some POA to interact with the contracts. You can obtain some test POA from the official [Sokol faucet](https://faucet-sokol.herokuapp.com/).*
+The contracts are deployed on the [PoA xDai network](https://blockscout.com/poa/dai). Since we have a live and a demo mode of the client, the smart contracts of these modes are working separately.
 
 ### Live Contracts
-- ditCoordinator: [0x049e4E2b99A6004a73a6c6E61d57f3b576f30aB6](https://blockscout.com/poa/sokol/address/0x049e4e2b99a6004a73a6c6e61d57f3b576f30ab6)
-- KNWToken: [0x79B71d6d295E23b36D8495756432085BAA357915](https://blockscout.com/poa/sokol/address/0x79B71d6d295E23b36D8495756432085BAA357915)
-- KNWVoting: [0xA31B6EdEc93DC69C91795e2A6EbeC90F2058b32D](https://blockscout.com/poa/sokol/address/0xA31B6EdEc93DC69C91795e2A6EbeC90F2058b32D)
+- ditCoordinator: [0x73F2cdF96941B0f51282Fd21bab108df829C9c71](https://blockscout.com/poa/dai/address/0x73F2cdF96941B0f51282Fd21bab108df829C9c71)
+- KNWToken: [0x508B1890a00BfdB348d1B7D335bE2029B69a5B92](https://blockscout.com/poa/dai/address/0x508B1890a00BfdB348d1B7D335bE2029B69a5B92)
+- KNWVoting: [0x991f901E1Fc151D13ba8C0E27a7f8c6ea3C524Cb](https://blockscout.com/poa/dai/address/0x991f901E1Fc151D13ba8C0E27a7f8c6ea3C524Cb)
 
 ### Demo Contracts
-- ditCoordinator: [0xf5Df1fa5Fbb7DCE71E2C7ceaC7D5632593cc6d15](https://blockscout.com/poa/sokol/address/0xf5Df1fa5Fbb7DCE71E2C7ceaC7D5632593cc6d15)
-- KNWToken: [0x19D29D553296F662bcE6ebBC9c14D53A24C49E7b](https://blockscout.com/poa/sokol/address/0x19D29D553296F662bcE6ebBC9c14D53A24C49E7b)
-- KNWVoting: [0xb5787F497DEAB27ebA96bf0E132B7A9AFD3b2E7D](https://blockscout.com/poa/sokol/address/0xb5787F497DEAB27ebA96bf0E132B7A9AFD3b2E7D) 
+- ditCoordinator: [0x0488Cea56d44E3BBEAD34D6Ffd2CBcD561d08b90](https://blockscout.com/poa/dai/address/0x0488Cea56d44E3BBEAD34D6Ffd2CBcD561d08b90)
+- KNWToken: [0x6081aa30758e9D752fd7d8E7729220A80771e835](https://blockscout.com/poa/dai/address/0x6081aa30758e9D752fd7d8E7729220A80771e835)
+- KNWVoting: [0x74F9c8Eeb2F0665858efD038007BbcF08075994D](https://blockscout.com/poa/dai/address/0x74F9c8Eeb2F0665858efD038007BbcF08075994D) 
 
 ## Contract Description
 ### KNWToken
