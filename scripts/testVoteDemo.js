@@ -123,6 +123,10 @@ module.exports = async function(callback) {
     // (Starting at 1 since the initiatior already voted with his proposal)
     for(var i = 1; i < 6; i++) {
         let freeKNWBalance = await KNWTokenInstance.freeBalanceOfLabel(accounts[i], label1);
+        freeKNWBalance = freeKNWBalance.div(web3.utils.toBN(i))
+        if(i == 3) {
+            freeKNWBalance = freeKNWBalance.div(web3.utils.toBN(10))
+        }
         ditCoordinatorInstance.voteOnProposal(
             repoName,
             proposalID, 

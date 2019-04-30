@@ -50,6 +50,7 @@ contract KNWVoting {
         bool didOpenVote;       // Inidicates whether a participant has revealed his vote
         bool isProposer;        // Inidicates whether a participant is the proposer of this vote
         uint256 usedKNW;        // Count of KNW that a participant uses in this vote
+        uint256 percentOfKNW;   // Percent of KNW that a user is currently using
         uint256 numberOfVotes;  // Count of votes that a participant has in this vote
         uint256 voteHash;       // The hashed vote of a participant
     }
@@ -144,16 +145,12 @@ contract KNWVoting {
     function startVote(bytes32 _repository, address _address, string _knowledgeLabel, uint256 _commitDuration, uint256 _revealDuration, uint256 _proposersStake, uint256 _numberOfKNW) external calledByDitCoordinator(msg.sender) returns (uint256 voteID) {
         currentVoteID = currentVoteID.add(1);
 
-        // Calculating the timestamps for the commit and reveal phase
-        uint256 commitEndDate = block.timestamp.add(_commitDuration);
-        uint256 openEndDate = commitEndDate.add(_revealDuration);
-
         // Creating a new vote
         votes[currentVoteID] = KNWVote({
             repository: _repository,
             knowledgeLabel: _knowledgeLabel,
-            commitEndDate: commitEndDate,
-            openEndDate: openEndDate,
+            commitEndDate: block.timestamp.add(_commitDuration),
+            openEndDate: block.timestamp.add(_commitDuration).add(_revealDuration),
             neededMajority: ditRepositories[_repository].majority,
             votesFor: 0,
             votesAgainst: 0,
@@ -172,11 +169,18 @@ contract KNWVoting {
             rewardPool: 0
         });
         
-        votes[currentVoteID].participant[_address].isProposer = true;
+        uint256 freeBalance = token.freeBalanceOfLabel(_address, votes[currentVoteID].knowledgeLabel);
 
         // Locking and storing the amount of KNW that the proposer has for this label
         require(token.lockTokens(_address, votes[currentVoteID].knowledgeLabel, _numberOfKNW));
         votes[currentVoteID].participant[_address].usedKNW = _numberOfKNW;
+        votes[currentVoteID].participant[_address].isProposer = true;
+
+        if (freeBalance == _numberOfKNW) {
+             votes[currentVoteID].participant[_address].percentOfKNW = 100;
+        } else if(freeBalance > 0) {
+            votes[currentVoteID].participant[_address].percentOfKNW = (_numberOfKNW.mul(100)).div(freeBalance);
+        } 
         
         return currentVoteID;
     }
@@ -193,9 +197,16 @@ contract KNWVoting {
         // msg.value of the callers vote transaction was checked in the calling ditContract
         numberOfVotes = stakesOfVote[_voteID].proposersStake;
         
+        uint256 freeBalance = token.freeBalanceOfLabel(_address, votes[currentVoteID].knowledgeLabel);
+
         // Returns the amount of free KNWTokens that are now used and locked for this vote
         require(token.lockTokens(_address, votes[_voteID].knowledgeLabel, _numberOfKNW));
         votes[_voteID].participant[_address].usedKNW = _numberOfKNW;
+        if (freeBalance == _numberOfKNW) {
+             votes[_voteID].participant[_address].percentOfKNW = 100;
+        } else if(freeBalance > 0) {
+            votes[_voteID].participant[_address].percentOfKNW = (_numberOfKNW.mul(100)).div(freeBalance);
+        } 
 
         // Calculation of vote weight due to KNW influence
         // Vote_Weight = Vote_Weight  + (Vote_Weight * KNW_Balance)
@@ -353,7 +364,7 @@ contract KNWVoting {
         if(vote.participant[_address].isProposer) {
             // the proposer is a special participant that is handled separately
             if(votePassed) {
-                numberOfKNW = mintKNW(_address, vote.knowledgeLabel, vote.winningPercentage);
+                numberOfKNW = mintKNW(_address, vote.knowledgeLabel, vote.winningPercentage, vote.participant[_address].percentOfKNW);
             } else if(stakesOfVote[_voteID].proposersReward == 0) {
                 // proposers reward is only zero if he lost the vote on the proposal, otherwise it was a draw
                 numberOfKNW = burnKNW(_address, vote.knowledgeLabel, vote.participant[_address].usedKNW, vote.winningPercentage);
@@ -370,7 +381,7 @@ contract KNWVoting {
                 reward = calculateStakeReturn(_voteID, votedRight, false);
                 // participants who voted for the winning option 
                 if(votedRight) {
-                    numberOfKNW = mintKNW(_address, vote.knowledgeLabel, vote.winningPercentage);
+                    numberOfKNW = mintKNW(_address, vote.knowledgeLabel, vote.winningPercentage, vote.participant[_address].percentOfKNW);
                 // participants who votes for the losing option
                 } else {
                     numberOfKNW = burnKNW(_address, vote.knowledgeLabel, vote.participant[_address].usedKNW, vote.winningPercentage);
@@ -388,7 +399,7 @@ contract KNWVoting {
         return (reward, votedRight, numberOfKNW);
     }
 
-    function mintKNW(address _address, string _knowledgeLabel, uint256 _winningPercentage) internal returns (uint256 numberOfKNW) {
+    function mintKNW(address _address, string _knowledgeLabel, uint256 _winningPercentage, uint256 _percentOfKNW) internal returns (uint256 numberOfKNW) {
         uint256 tokenAmount = 0;
         if(MINTING_METHOD == 0) {
             // Regular minting:
@@ -398,6 +409,7 @@ contract KNWVoting {
         }
 
         if(tokenAmount > 0) {
+            tokenAmount = (tokenAmount.mul(_percentOfKNW)).div(100);
             require(token.mint(_address, _knowledgeLabel, tokenAmount));
         }
 
