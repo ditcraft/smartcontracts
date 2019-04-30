@@ -6,7 +6,7 @@ interface KNWTokenContract {
     function balanceOfLabel(address _account, string _label) external view returns (uint256 balance);
     function freeBalanceOfLabel(address _account, string _label) external view returns (uint256 freeBalance);
     function lockTokens(address _account, string _label, uint256 _amount) external returns (bool success);
-    function unlockTokens(address _account, string _label, uint256 _numberOfTokens) external returns (bool success);
+    function unlockTokens(address _account, string _label, uint256 _amount) external returns (bool success);
     function mint(address _account, string _label, uint256 _amount) external returns (bool success);
     function burn(address _account, string _label, uint256 _amount) external returns (bool success);
 }

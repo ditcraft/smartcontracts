@@ -2,10 +2,6 @@ pragma solidity 0.4.25;
 
 import "./libraries/SafeMath.sol";
 
-interface KNWTokenContract {
-    function addVotingContract(address _newContractAddress) external;
-}
-
 interface KNWVotingContract {
     function addNewRepository(bytes32 _newRepository, uint256 _majority) external returns (bool success);
     function startVote(bytes32 _repository, address _address, string _knowledgeLabel, uint256 _commitDuration, uint256 _revealDuration, uint256 _proposersStake, uint256 _numberOfKNW) external returns (uint256 voteID);
@@ -58,7 +54,6 @@ contract ditCoordinator {
     address internal ditManager;
 
     KNWVotingContract KNWVote;
-    KNWTokenContract KNWToken;
 
     uint256 constant public MIN_VOTE_DURATION = 10*60; // 10 minutes
     uint256 constant public MAX_VOTE_DURATION = 2*7*24*60*60; // 2 weeks
@@ -84,7 +79,6 @@ contract ditCoordinator {
         KNWVotingAddress = _KNWVotingAddress;
         KNWVote = KNWVotingContract(KNWVotingAddress);
         KNWTokenAddress = _KNWTokenAddress;
-        KNWToken = KNWTokenContract(KNWTokenAddress);
 
         lastDitCoordinator = _lastDitCoordinator;
 
