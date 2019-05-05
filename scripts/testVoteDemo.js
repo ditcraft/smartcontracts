@@ -92,7 +92,7 @@ module.exports = async function(callback) {
 
     // Creating a new repository
     if(!no_new) {
-        await ditCoordinatorInstance.initRepository(repoName, label1, label2, label3, voteMajority, {from: accounts[0]});
+        await ditCoordinatorInstance.initRepository("github.com/testRepo" + randomNumber, label1, label2, label3, voteMajority, {from: accounts[0]});
         console.log("initRepo done");
     }
 
@@ -124,9 +124,6 @@ module.exports = async function(callback) {
     for(var i = 1; i < 6; i++) {
         let freeKNWBalance = await KNWTokenInstance.freeBalanceOfLabel(accounts[i], label1);
         freeKNWBalance = freeKNWBalance.div(web3.utils.toBN(i))
-        if(i == 3) {
-            freeKNWBalance = freeKNWBalance.div(web3.utils.toBN(10))
-        }
         ditCoordinatorInstance.voteOnProposal(
             repoName,
             proposalID, 

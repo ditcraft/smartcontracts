@@ -78,7 +78,7 @@ module.exports = async function(callback) {
     }
     // Creating a new repository
     if(!no_new) {
-        await ditCoordinatorInstance.initRepository(repoName, label1, label2, label3, voteMajority, {from: accounts[0]});
+        await ditCoordinatorInstance.initRepository("github.com/testRepo" + randomNumber, label1, label2, label3, voteMajority, {from: accounts[0]});
         console.log("initRepo done");
     }
 
