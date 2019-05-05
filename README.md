@@ -8,12 +8,12 @@ This repository contains a truffle v5 project. Feel free to insert your favorite
 The contracts are deployed on the [PoA xDai network](https://blockscout.com/poa/dai). Since we have a live and a demo mode of the client, the smart contracts of these modes are working separately.
 
 ### Live Contracts
-- ditCoordinator: [0x73F2cdF96941B0f51282Fd21bab108df829C9c71](https://blockscout.com/poa/dai/address/0x73F2cdF96941B0f51282Fd21bab108df829C9c71)
+- ditCoordinator: [0x429e37f14462bdfca0f1168dae24f66f61e6b04c](https://blockscout.com/poa/dai/address/0x429e37f14462bdfca0f1168dae24f66f61e6b04c)
 - KNWToken: [0x508B1890a00BfdB348d1B7D335bE2029B69a5B92](https://blockscout.com/poa/dai/address/0x508B1890a00BfdB348d1B7D335bE2029B69a5B92)
 - KNWVoting: [0x991f901E1Fc151D13ba8C0E27a7f8c6ea3C524Cb](https://blockscout.com/poa/dai/address/0x991f901E1Fc151D13ba8C0E27a7f8c6ea3C524Cb)
 
 ### Demo Contracts
-- ditCoordinator: [0x0488Cea56d44E3BBEAD34D6Ffd2CBcD561d08b90](https://blockscout.com/poa/dai/address/0x0488Cea56d44E3BBEAD34D6Ffd2CBcD561d08b90)
+- ditCoordinator: [0x1dc6f1edd14b0b5d24305a0cfb6d4f0a5de3b4f6](https://blockscout.com/poa/dai/address/0x1dc6f1edd14b0b5d24305a0cfb6d4f0a5de3b4f6)
 - KNWToken: [0x6081aa30758e9D752fd7d8E7729220A80771e835](https://blockscout.com/poa/dai/address/0x6081aa30758e9D752fd7d8E7729220A80771e835)
 - KNWVoting: [0x74F9c8Eeb2F0665858efD038007BbcF08075994D](https://blockscout.com/poa/dai/address/0x74F9c8Eeb2F0665858efD038007BbcF08075994D) 
 
