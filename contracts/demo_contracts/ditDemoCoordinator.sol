@@ -27,6 +27,7 @@ contract ditDemoCoordinator {
     using SafeMath for uint256;
     
     struct ditRepository {
+        string name;
         string[3] knowledgeLabels;
         uint256 currentProposalID;
         uint256 votingMajority;
@@ -75,6 +76,7 @@ contract ditDemoCoordinator {
     mapping (address => bool) public passedKYC;
     mapping (address => bool) public isKYCValidator;
 
+    event InitializeRepository(bytes32 indexed repository, address indexed who);
     event ProposeCommit(bytes32 indexed repository, uint256 indexed proposal, address indexed who, string label, uint256 numberOfKNW);
     event CommitVote(bytes32 indexed repository, uint256 indexed proposal, address indexed who, string label, uint256 stake, uint256 numberOfKNW, uint256 numberOfVotes);
     event OpenVote(bytes32 indexed repository, uint256 indexed proposal, address indexed who, string label, bool accept, uint256 numberOfVotes);
@@ -138,43 +140,52 @@ contract ditDemoCoordinator {
      * @param _votingMajority The majority needed for a vote to succeed 
      * @return True on success
      */
-    function initRepository(bytes32 _repository, string _label1, string _label2, string _label3, uint256 _votingMajority) external onlyPassedKYC(msg.sender) returns (bool) {
-        require(_repository != 0, "Repository descriptor can't be zero");
-        require(repositories[_repository].votingMajority == 0, "Repository can only be initialized once");
+    function initRepository(string _repository, string _label1, string _label2, string _label3, uint256 _votingMajority) external onlyPassedKYC(msg.sender) returns (bool) {
+        require(bytes(_repository).length != 0, "Repository descriptor can't be empty");
+        bytes32 _hash = keccak256(abi.encodePacked(_repository));
+
+        require(repositories[_hash].votingMajority == 0, "Repository can only be initialized once");
         require(_votingMajority >= 50, "Voting majority has to be >= 50");
         require(bytes(_label1).length > 0 || bytes(_label2).length > 0 || bytes(_label3).length > 0, "Provide at least one Knowledge Label");
         require(nextDitCoordinator == address(0), "There is a newer contract deployed");
 
         // Storing the new dit-based repository
-        repositories[_repository] = ditRepository({
+        repositories[_hash] = ditRepository({
+            name: _repository,
             knowledgeLabels: [_label1, _label2, _label3],
             currentProposalID: 0,
             votingMajority: _votingMajority
         });
 
-        KNWVote.addNewRepository(_repository, _votingMajority);
+        KNWVote.addNewRepository(_hash, _votingMajority);
+        
+        emit InitializeRepository(_hash, msg.sender);
         
         return true;
     }
 
-    function migrateRepository(bytes32 _repository) external onlyPassedKYC(msg.sender) returns (bool) {
+    function migrateRepository(string _repository) external onlyPassedKYC(msg.sender) returns (bool) {
         require(lastDitCoordinator != address(0));
         ditDemoCoordinator last = ditDemoCoordinator(lastDitCoordinator);
 
-        uint256 _currentProposalID = last.getCurrentProposalID(_repository);
-        uint256 _votingMajority = last.getVotingMajority(_repository);
+        require(bytes(_repository).length != 0, "Repository descriptor can't be empty");
+        bytes32 _hash = keccak256(abi.encodePacked(_repository));
+
+        uint256 _currentProposalID = last.getCurrentProposalID(_hash);
+        uint256 _votingMajority = last.getVotingMajority(_hash);
         string[3] memory _knowledgeLabels;
         for (uint8 i = 0; i < 3; i++) {
-            _knowledgeLabels[i] = last.getKnowledgeLabels(_repository, i);
+            _knowledgeLabels[i] = last.getKnowledgeLabels(_hash, i);
         }
 
-        repositories[_repository] = ditRepository({
+        repositories[_hash] = ditRepository({
+            name: _repository,
             knowledgeLabels: _knowledgeLabels,
             currentProposalID: _currentProposalID,
             votingMajority: _votingMajority
         });
-
-        KNWVote.addNewRepository(_repository, _votingMajority);
+        
+        KNWVote.addNewRepository(_hash, _votingMajority);
 
         return true;
     }
