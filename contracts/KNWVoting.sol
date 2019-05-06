@@ -180,7 +180,9 @@ contract KNWVoting {
              votes[currentVoteID].participant[_address].percentOfKNW = 100;
         } else if(freeBalance > 0) {
             votes[currentVoteID].participant[_address].percentOfKNW = (_numberOfKNW.mul(100)).div(freeBalance);
-        } 
+        }
+        
+        require(votes[currentVoteID].participant[_address].percentOfKNW >= 1, "Can't start a vote without using any KNW");
         
         return currentVoteID;
     }
@@ -206,7 +208,9 @@ contract KNWVoting {
              votes[_voteID].participant[_address].percentOfKNW = 100;
         } else if(freeBalance > 0) {
             votes[_voteID].participant[_address].percentOfKNW = (_numberOfKNW.mul(100)).div(freeBalance);
-        } 
+        }
+        
+        require(votes[currentVoteID].participant[_address].percentOfKNW >= 1, "Can't vote without using any KNW");
 
         // Calculation of vote weight due to KNW influence
         // Vote_Weight = Vote_Weight  + (Vote_Weight * KNW_Balance)
