@@ -1,4 +1,4 @@
-pragma solidity 0.4.25;
+pragma solidity ^0.5.10;
 
 import "./libraries/SafeMath.sol";
 
@@ -6,43 +6,53 @@ import "./libraries/SafeMath.sol";
  * @title Knowledge-Token
  *
  * @dev Implementation of the knowledge token that is being used for knowledge-extractable voting
- * This implementation has the additional functionality of mapping an address to string labels
- * instead of mapping them directly to uint256 balances. It also implements locking, unlocking and
- * minting and burning functions.
+ * This implementation has the additional functionality of mapping an address to ids (representing 
+ * a string) instead of mapping them directly to uint256 balance. It also implements locking, 
+ * unlocking and minting and burning functions.
  */
 contract KNWToken {
     using SafeMath for uint256;
 
-    event Mint(address indexed who, string label, uint256 value);
-    event Burn(address indexed who, string label, uint256 value);
+    event Mint(address indexed who, uint256 id, uint256 value);
+    event Burn(address indexed who, uint256 id, uint256 value);
 
-    mapping (address => mapping (string => uint256)) private _balances;
-    mapping (address => mapping (string => uint256)) private _lockedBalances;
-
-    mapping (address => mapping (uint256 => string)) private _labels;
-    mapping (address => uint256) private _labelCount;
-    mapping (address => mapping (string => bool)) private _usedLabel;
+    mapping (address => mapping (uint256 => uint256)) private _balance;
+    mapping (address => mapping (uint256 => uint256)) private _lockedBalance;
 
     uint256 private _totalSupply;
-    mapping (string => uint256) private _labelSupply;
+    mapping (uint256 => uint256) private _idSupply;
+
+    string[] private _labels;
     
     string constant public symbol = "KNW";
     string constant public name = "Knowledge Token";
     uint8 constant public decimals = 18;
 
+    address public manager;
     mapping (address => bool) public authorizedAddresses;
 
     constructor() public {
-        authorizedAddresses[msg.sender] = true;
+        manager = msg.sender;
+    }
+
+    /**
+     * @dev Replaces the manager address 
+     * @param _address The address of the new manager
+     * @return A boolean that indicates if the operation was successful
+     */
+    function replaceManager(address _address) external onlyManager(msg.sender) returns (bool success) {
+        require(_address != address(0));
+        manager = _address;
+        return true;
     }
 
     /**
      * @dev Adds an address that will be able to access the authorized functions
      * @param _address An address of a new authorized voting contract
+     * @return A boolean that indicates if the operation was successful
      */
-    function authorizeAddress(address _address) external returns (bool success) {
+    function authorizeAddress(address _address) external onlyManager(msg.sender) returns (bool success) {
         require(_address != address(0), "Authorized contracts' address can't be empty");
-        require(authorizedAddresses[msg.sender], "Only authorized addresses can do this");
         authorizedAddresses[_address] = true;
         return true;
     }
@@ -50,16 +60,16 @@ contract KNWToken {
     /**
      * @dev Removes an address that will be able to access the authorized functions
      * @param _address An address of a new authorized voting contract
+     * @return A boolean that indicates if the operation was successful
      */
-    function removeAddress(address _address) external returns (bool success) {
+    function removeAddress(address _address) external onlyManager(msg.sender) returns (bool success) {
         require(_address != address(0), "Authorized contracts' address can't be empty");
-        require(authorizedAddresses[msg.sender], "Only authorized addresses can do this");
         authorizedAddresses[_address] = false;
         return true;
     }
     
     /**
-     * @dev Total number of tokens for all labels
+     * @dev Total number of tokens for all ids
      * @return A uint256 representing the total token amount
      */
     function totalSupply() external view returns (uint256) {
@@ -67,128 +77,133 @@ contract KNWToken {
     }
 
     /**
-     * @dev Number of tokens for a certain label
-     * @param _label The label of the tokens
-     * @return A uint256 representing the token amount for this label
+     * @dev Number of tokens for a certain id
+     * @param _id The id of the tokens
+     * @return A uint256 representing the token amount for this id
      */
-    function totalLabelSupply(string _label) external view returns (uint256 totalSupplyOfLabel) {
-        return _labelSupply[_label];
+    function totalIDSupply(uint256 _id) external view returns (uint256 totalSupplyOfID) {
+        return _idSupply[_id];
     }
 
     /**
-     * @dev Gets the balance for a specified address for a certain label
+     * @dev Gets the balance for a specified address for a certain id
      * @param _address The address to query the balance of
-     * @param _label The label of the requested balance
-     * @return A uint256 representing the amount owned be the passed address for the specified label
+     * @param _id The id of the requested balance
+     * @return A uint256 representing the amount owned be the passed address for the specified id
      */
-    function balanceOfLabel(address _address, string _label) external view returns (uint256 balance) {
-        return _balances[_address][_label];
+    function balanceOfID(address _address, uint256 _id) external view returns (uint256 balance) {
+        return _balance[_address][_id];
     }
 
     /**
-     * @dev Gets the non-locked balance for a specified address for a certain label
+     * @dev Gets the non-locked balance for a specified address for a certain id
      * @param _address The address to query the free balance of
-     * @param _label The label of the requested free balance
-     * @return A uint256 representing the non-locked amount owned be the passed address for the specified label
+     * @param _id The id of the requested free balance
+     * @return A uint256 representing the non-locked amount owned be the passed address for the specified id
      */
-    function freeBalanceOfLabel(address _address, string _label) external view returns (uint256 freeBalance) {
-        return _balances[_address][_label].sub(_lockedBalances[_address][_label]);
+    function freeBalanceOfID(address _address, uint256 _id) external view returns (uint256 freeBalance) {
+        return _balance[_address][_id].sub(_lockedBalance[_address][_id]);
     }
 
     /**
-     * @dev Gets a specific label of an address
-     * @param _address The address to query the free balance of
-     * @param _labelID The id of the label
-     * @return The label (string)
+     * @dev Gets the string label for an id
+     * @param _id The id whoich label is requested
+     * @return A string representing the label of the id
      */
-    function labelOfAddress(address _address, uint256 _labelID) external view returns (string memory label) {
-        return _labels[_address][_labelID];
+    function labelOfID(uint256 _id) external view returns (string memory label) {
+        return _labels[_id];
     }
 
     /**
-     * @dev Get the amount of labels that an address has
-     * @param _address The address to query the label count
-     * @return A uint256 representing the aount of labels that an address hat
+     * @dev Gets the amount of ids
+     * @return A uint256 representing the amount of ids
      */
-    function labelCountOfAddress(address _address) external view returns (uint256 labelCount) {
-        return _labelCount[_address];
+    function amountOfIDs() external view returns (uint256 amount) {
+        return _labels.length;
     }
 
     /**
-     * @dev Locks a non-locked amount of tokens for an address at a certain label
+     * @dev Locks a non-locked amount of tokens for an address at a certain id
      * @param _address The address to lock the free balance of
-     * @param _label The label of the free balance that ought to be locked
+     * @param _id The ID of the free balance that ought to be locked
      * @param _amount The amount of tokens that ought to be locked
      * @return A boolean that indicates if the operation was successful
      */
-    function lockTokens(address _address, string _label, uint256 _amount) external onlyAuthorizedAddress(msg.sender) returns (bool success) {
-        uint256 freeTokens = _balances[_address][_label].sub(_lockedBalances[_address][_label]);
+    function lockTokens(address _address, uint256 _id, uint256 _amount) external onlyAuthorizedAddress(msg.sender) returns (bool success) {
+        uint256 freeTokens = _balance[_address][_id].sub(_lockedBalance[_address][_id]);
         require(freeTokens >= _amount, "Can't lock more tokens than available");
-        _lockedBalances[_address][_label] = _lockedBalances[_address][_label].add(_amount);
+        _lockedBalance[_address][_id] = _lockedBalance[_address][_id].add(_amount);
         return true;
     }
 
     /**
      * @dev Unlocks the specified amount of tokens
      * @param _address The address to unlock a certain balance of
-     * @param _label The label of the amount that ought to be unlocked
+     * @param _id The id of the amount that ought to be unlocked
      * @param _amount The amount of tokens that is requested to be unlocked
      * @return A boolean that indicates if the operation was successful
      */
-    function unlockTokens(address _address, string _label, uint256 _amount) external onlyAuthorizedAddress(msg.sender) returns (bool success) {
-        require(_lockedBalances[_address][_label] <= _balances[_address][_label], "Cant lock more KNW than an address has");
-        _lockedBalances[_address][_label] = _lockedBalances[_address][_label].sub(_amount);
+    function unlockTokens(address _address, uint256 _id, uint256 _amount) external onlyAuthorizedAddress(msg.sender) returns (bool success) {
+        require(_lockedBalance[_address][_id] <= _balance[_address][_id], "Cant lock more KNW than an address has");
+        _lockedBalance[_address][_id] = _lockedBalance[_address][_id].sub(_amount);
         return true;
     }
 
     /**
      * @dev Mints new tokens according to the specified minting method and the winning percentage
      * @param _address The address to receive new KNW tokens
-     * @param _label The label that new token will be minted for
+     * @param _id The ID that new token will be minted for
      * @param _amount The amount of tokens to be minted
      * @return A boolean that indicates if the operation was successful
      */
-    function mint(address _address, string _label, uint256 _amount) external onlyAuthorizedAddress(msg.sender) returns (bool success) {
+    function mint(address _address, uint256 _id, uint256 _amount) external onlyAuthorizedAddress(msg.sender) returns (bool success) {
         require(_address != address(0), "Address can't be empty");
-        require(bytes(_label).length > 0, "Knowledge-Label can't be empty");
+        require(_id < _labels.length, "ID needs to be within range of allowed IDs");
 
         _totalSupply = _totalSupply.add(_amount);
-        _labelSupply[_label] = _labelSupply[_label].add(_amount);
-        _balances[_address][_label] = _balances[_address][_label].add(_amount);
-        
-        // If the address hasn't used this label before, this label will be added to the list
-        if(!_usedLabel[_address][_label]) {
-            _labelCount[_address] = _labelCount[_address].add(1);
-            _labels[_address][_labelCount[_address]] = _label;
-            _usedLabel[_address][_label] = true;
-        }
+        _idSupply[_id] = _idSupply[_id].add(_amount);
+        _balance[_address][_id] = _balance[_address][_id].add(_amount);
 
-        emit Mint(_address, _label, _amount);
+        emit Mint(_address, _id, _amount);
         return true;
     }
 
     /**
      * @dev Burns tokens accoring to the specified burning method and the winning percentage
      * @param _address The address to receive new KNW tokens
-     * @param _label The label that new token will be minted for
+     * @param _id The ID that new token will be minted for
      * @param _amount The amount of tokens that will be burned
      * @return A boolean that indicates if the operation was successful
      */
-    function burn(address _address, string _label, uint256 _amount) external onlyAuthorizedAddress(msg.sender) returns (bool success) {
+    function burn(address _address, uint256 _id, uint256 _amount) external onlyAuthorizedAddress(msg.sender) returns (bool success) {
         require(_address != address(0), "Address can't be empty");
-        require(bytes(_label).length > 0, "Knowledge-Label can't be empty");
-        require(_balances[_address][_label] >= _amount, "Can't burn more KNW than the address holds");
+        require(_id < _labels.length, "ID needs to be within range of allowed IDs");
 
         _totalSupply = _totalSupply.sub(_amount);
-        _labelSupply[_label] = _labelSupply[_label].sub(_amount);
-        _balances[_address][_label] = _balances[_address][_label].sub(_amount);
+        _idSupply[_id] = _idSupply[_id].sub(_amount);
+        _balance[_address][_id] = _balance[_address][_id].sub(_amount);
         
-        emit Burn(_address, _label, _amount);
+        emit Burn(_address, _id, _amount);
+        return true;
+    }
+
+    /**
+     * @dev Adds a new label
+     * @param _newLabel The new label that ought ot be added
+     * @return A boolean that indicates if the operation was successful
+     */
+    function addNewLabel(string calldata _newLabel) external onlyManager(msg.sender) returns (bool success) {
+        _labels.push(_newLabel);
         return true;
     }
 
     modifier onlyAuthorizedAddress(address _address) {
         require(authorizedAddresses[_address]);
+        _;
+    }
+
+    modifier onlyManager(address _address) {
+        require(manager == msg.sender);
         _;
     }
 }
