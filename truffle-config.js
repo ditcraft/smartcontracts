@@ -42,7 +42,7 @@ module.exports = {
   networks: {
     development: {
       host: "127.0.0.1",     // Localhost (default: none)
-      port: 7545,            // Standard Ethereum port (default: none)
+      port: 8545,            // Standard Ethereum port (default: none)
       gas: 6721975,
       gasPrice: 20000000000,
       network_id: "*",       // Any network (default: none)
@@ -81,7 +81,7 @@ module.exports = {
     },
 
     xdai: {
-      provider: () => new HDWallet(mnemonic, `https://dai.poa.network`, 0, 6),
+      provider: () => new HDWallet(mnemonic, `https://node.ditcraft.io`, 0, 6),
       network_id: 100,
       port: 443,
       gas: 6000000,
@@ -110,7 +110,7 @@ module.exports = {
   // Configure your compilers
   compilers: {
     solc: {
-      version: "0.4.25",    // Fetch exact version from solc-bin (default: truffle's version)
+      version: "0.5.10",    // Fetch exact version from solc-bin (default: truffle's version)
       // docker: true,        // Use "0.5.1" you've installed locally with docker (default: false)
       // settings: {          // See the solidity docs for advice about optimization and evmVersion
       //  optimizer: {

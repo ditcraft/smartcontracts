@@ -56,11 +56,11 @@ module.exports = async function(callback) {
     } 
 
     // Config
-    let label1 = "golang";
-    let label2 = "c";
-    let label3 = "java"; 
+    let knowledgeIDs = [ 0, 1 ];
     let accounts = await web3.eth.getAccounts();
     let repoName = web3.utils.soliditySha3("github.com/testRepo" + randomNumber);
+    let topic = "This is a test proposal topic with 140 letters to test everthing in order to make sure that nothing will break, 0123456789012345678901234567"
+    let headHash = web3.utils.soliditySha3(topic);
     console.log("Repository: " + "github.com/testRepo" + randomNumber);
     console.log("Hash: " + repoName)
 
@@ -75,10 +75,14 @@ module.exports = async function(callback) {
             await ditCoordinatorInstance.passKYC(accounts[i])
         }
         console.log("Passed KYC for all accounts")
+        await KNWTokenInstance.addNewLabel("JavaScript")
+        await KNWTokenInstance.addNewLabel("Golang")
+        console.log("Added two new Knowledge-Lables to the KNWToken contract")
+
     }
     // Creating a new repository
     if(!no_new) {
-        await ditCoordinatorInstance.initRepository("github.com/testRepo" + randomNumber, label1, label2, label3, voteMajority, {from: accounts[0]});
+        await ditCoordinatorInstance.initRepository("github.com/testRepo" + randomNumber, knowledgeIDs, voteMajority, {from: accounts[0]});
         console.log("initRepo done");
     }
 
@@ -89,12 +93,13 @@ module.exports = async function(callback) {
     console.log("------ vote starts ------");
 
     // Proposing a commit
-    let randomEthValue = (Math.random() * 0.01 + 0.001);
+    // let randomEthValue = (Math.random() * 0.001 + 0.0001);
+    let randomEthValue = 0.00001;
     let USED_STAKE =  web3.utils.toWei(randomEthValue.toString(), 'ether');
     console.log("Stake will be " + randomEthValue + " ETH")
     
-    let freeKNWBalance = await KNWTokenInstance.freeBalanceOfLabel(accounts[0], label1);
-    await ditCoordinatorInstance.proposeCommit(repoName, 0, freeKNWBalance, 60, 60, {from: accounts[0], value: USED_STAKE});
+    let freeKNWBalance = await KNWTokenInstance.freeBalanceOfID(accounts[0], knowledgeIDs[0]);
+    await ditCoordinatorInstance.proposeCommit(repoName, headHash, topic, knowledgeIDs[0], freeKNWBalance, 60, {from: accounts[0], value: USED_STAKE});
     
     console.log("proposed commit")
 
@@ -107,7 +112,7 @@ module.exports = async function(callback) {
     // Voting on the proposal
     // (Starting at 1 since the initiatior already voted with his proposal)
     for(var i = 1; i < 6; i++) {
-        let freeKNWBalance = await KNWTokenInstance.freeBalanceOfLabel(accounts[i], label1);
+        let freeKNWBalance = await KNWTokenInstance.freeBalanceOfID(accounts[i], knowledgeIDs[0]);
         ditCoordinatorInstance.voteOnProposal(
             repoName,
             proposalID, 
@@ -190,7 +195,7 @@ module.exports = async function(callback) {
     // Retrieving the KNW balances
     let knwBalanceBefore = []
     for(var i = 0; i <= 5; i++) {
-        knwBalanceBefore.push((await KNWTokenInstance.balanceOfLabel(accounts[i], label1)).toString(10));
+        knwBalanceBefore.push((await KNWTokenInstance.balanceOfID(accounts[i], knowledgeIDs[0])).toString(10));
     }
 
     // Retrieving the number of votes
@@ -240,7 +245,7 @@ module.exports = async function(callback) {
     // Retrieving the KNW balances again to compare
     let knwBalanceAfter = []
     for(var i = 0; i < 6; i++) {
-        knwBalanceAfter.push((await KNWTokenInstance.balanceOfLabel(accounts[i], label1)).toString(10));
+        knwBalanceAfter.push((await KNWTokenInstance.balanceOfID(accounts[i], knowledgeIDs[0])).toString(10));
     }
 
     console.log("------ results ------")
