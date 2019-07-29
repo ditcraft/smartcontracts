@@ -19,25 +19,27 @@ The contracts are deployed on the [PoA xDai network](https://blockscout.com/poa/
 
 ## Contract Description
 ### KNWToken
-The KNWToken is a modified version of the ERC20 token, comparable to the [ERC888](https://github.com/ethereum/EIPs/issues/888) or [ERC1155 proposals](https://github.com/ethereum/EIPs/issues/1155). It has the following external interfaces:
+The KNWToken is a modified version of the ERC20 token, comparable to the [ERC1155](https://github.com/ethereum/EIPs/issues/1155) or [ERC1178 proposals](https://github.com/ethereum/EIPs/issues/1179). It has the following external interfaces:
 
  - `totalsupply()` 
 	- returns the total count of KNW tokens
- - `totalLabelSupply(label)` 
-	 - returns the total count of KNW tokens for a certain label
- - `balanceOfLabel(address, label)` 
-	 - returns the count of KNW tokens for a certain label of a certain address
- - `freeBalanceOfLabel(address, label)`
-	 - returns the free (non-locked) count of KNW tokens for a certain label of a certain address
- - `labelsOfAddress(address)` 
-	 - returns the labels that a certain address has a token count for
- - `lockTokens(address, label, amount)`
-	 - locks and returns the specified amount of KNW tokens for a certain label of a certain address to be used in a vote (*this function can only be called by a KNWVoting Contract*)
- - `unlockTokens(address, label, amount)`
-	 - unlocks specified amount of KNW tokens for a certain label of a certain address that were used in a vote (*this function can only be called by a KNWVoting Contract*)
- - `mint(address, label, amount)` 
+ - `totalIDSupply(id)` 
+	 - returns the total count of KNW tokens for a certain id
+ - `balanceOfID(address, id)` 
+	 - returns the count of KNW tokens for a certain id of a certain address
+ - `freeBalanceOfID(address, id)`
+	 - returns the free (non-locked) count of KNW tokens for a certain id of a certain address
+ - `labelOfID(id)` 
+	 - returns the string representation of an id
+- `amountOfIDs()`
+	 - returns the amount of ids that exist 
+ - `lockTokens(address, id, amount)`
+	 - locks and returns the specified amount of KNW tokens for a certain id of a certain address to be used in a vote (*this function can only be called by a KNWVoting Contract*)
+ - `unlockTokens(address, id, amount)`
+	 - unlocks specified amount of KNW tokens for a certain id of a certain address that were used in a vote (*this function can only be called by a KNWVoting Contract*)
+ - `mint(address, id, amount)` 
 	 - will mint new KNWTokens for the specified address (*this function can only be called by a KNWVoting Contract*)
- - `burn(address, label, amount)` 
+ - `burn(address, id, amount)` 
 	 - will burn KNWTokens of the specified address (*this function can only be called by a KNWVoting Contract*)
 
 Note that this contract doesn't have transfer functions, as KNW tokens are not transferable. 
@@ -45,9 +47,9 @@ Note that this contract doesn't have transfer functions, as KNW tokens are not t
 ### KNWVoting
 KNWVoting is a highly modified version of the [PLCR Voting scheme by Mike Goldin](https://github.com/ConsenSys/PLCRVoting). It has the following external interfaces:
 
- - `startVote(address, knowledgeLabel, commitDuration, revealDuration, stake, amountOfKNW)`
+ - `startVote(repository, address, knowledgeID, voteDuration, stake, numberOfKNW)`
 	 -  starts a new poll according to the provided settings
- - `commitVote(pollID, address, hash, amountOfKNW)`
+ - `commitVote(pollID, address, hash, numberOfKNW)`
 	 -  commits a vote hash\* (this also triggers the locking of KNW tokens)
  - `openVote(pollID, address, choice, salt)`
 	 - opens the commitment and reveals the vote to the public
@@ -62,11 +64,11 @@ Note that all of the functions that start or interact with votes can only be cal
 ### ditCoordinator
 The ditCoordinator contract is the central piece of this architecture. It has the following external interfaces:
 
- - `initRepository(repository, knowledge_labels, neededMajority)`
+ - `initRepository(repository, []knowledgeIDs, neededMajority)`
 	 -  initializes a new repository with the specified settings
  - `repositoryIsInitialized(repository)`
 	 -  inidicates whether a repository has been initialized
- - `proposeCommit(repository, label, amountOfKNW, voteDuration)`
+ - `proposeCommit(repository, description, identifier, knowledgeID, amountOfKNW, voteDuration)`
 	 -  initiates a new proposal and thus starts a new vote with the specified settings
  - `voteOnProposal(repository, proposalID, voteHash, amountOfKNW)` (also triggers the locking of KNW tokens)
 	 -  votes on a proposal with the concealed/hashed vote
