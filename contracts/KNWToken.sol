@@ -15,6 +15,7 @@ contract KNWToken {
 
     event Mint(address indexed who, uint256 id, uint256 value);
     event Burn(address indexed who, uint256 id, uint256 value);
+    event NewLabel(uint256 indexed id, string label);
 
     mapping (address => mapping (uint256 => uint256)) private _balance;
     mapping (address => mapping (uint256 => uint256)) private _lockedBalance;
@@ -194,6 +195,7 @@ contract KNWToken {
      */
     function addNewLabel(string calldata _newLabel) external onlyManager(msg.sender) returns (bool success) {
         _labels.push(_newLabel);
+        emit NewLabel(_labels.length-1, _newLabel);
         return true;
     }
 

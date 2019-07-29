@@ -373,6 +373,7 @@ contract KNWVoting {
                 // proposers reward is only zero if he lost the vote on the proposal, otherwise it was a draw
                 numberOfKNW = burnKNW(_address, vote.knowledgeID, vote.participant[_address].usedKNW, vote.winningPercentage);
             }
+            votedRight = votePassed;
             reward = stakesOfVote[_voteID].proposersReward;
         } else if(didOpen(_address, _voteID)) {
             // If vote ended 50:50
