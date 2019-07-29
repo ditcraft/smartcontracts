@@ -33,8 +33,8 @@ contract ditCoordinator {
     }
 
     struct proposal {
-        string topic;
-        bytes32 commitHash;
+        string description;
+        string identifier;
         uint256 KNWVoteID;
         uint256 knowledgeID;
         address proposer;
@@ -205,10 +205,10 @@ contract ditCoordinator {
     }
 
     // Proposing a new commit for the repository
-    function proposeCommit(bytes32 _repository, bytes32 _commitHash, string calldata _topic, uint256 _knowledgeID, uint256 _numberOfKNW, uint256 _voteDuration) external payable onlyPassedKYC(msg.sender) returns (uint256 proposalID) {
+    function proposeCommit(bytes32 _repository, string calldata _description, string calldata _identifier, uint256 _knowledgeID, uint256 _numberOfKNW, uint256 _voteDuration) external payable onlyPassedKYC(msg.sender) returns (uint256 proposalID) {
         require(msg.value > 0, "Value of the transaction can not be zero");
         require(_voteDuration >= MIN_VOTE_DURATION && _voteDuration <= MAX_VOTE_DURATION, "Vote duration invalid");
-        require(bytes(_topic).length > 0, "Topic of proposal can't be empty");
+        require(bytes(_description).length > 0 && bytes(_identifier).length > 0, "Topic and identifier of proposal can't be empty");
         require(nextDitCoordinator == address(0), "There is a newer contract deployed");
         require(allowedKnowledgeIDs[_repository][_knowledgeID], "Knowledge ID is not correct");
         
@@ -217,8 +217,8 @@ contract ditCoordinator {
 
         // Creating a new proposal
         proposalsOfRepository[_repository][newProposalID] = proposal({
-            topic: _topic,
-            commitHash: _commitHash,
+            description: _description,
+            identifier: _identifier,
             KNWVoteID: KNWVote.startVote(_repository, msg.sender, _knowledgeID, _voteDuration, msg.value, _numberOfKNW),
             knowledgeID: _knowledgeID,
             proposer: msg.sender,
