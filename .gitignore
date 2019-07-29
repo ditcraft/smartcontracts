@@ -16,6 +16,9 @@ build
 dist
 package-lock.json
 
+# Generated files
+abigen_out/
+
 # Confidential files
 .walletsecret
 .infurakey
