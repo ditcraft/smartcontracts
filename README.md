@@ -8,14 +8,14 @@ This repository contains a truffle v5 project. Feel free to insert your favorite
 The contracts are deployed on the [PoA xDai network](https://blockscout.com/poa/dai). Since we have a live and a demo mode of the client, the smart contracts of these modes are working separately.
 
 ### Live Contracts
-- ditCoordinator: [0x429e37f14462bdfca0f1168dae24f66f61e6b04c](https://blockscout.com/poa/dai/address/0x429e37f14462bdfca0f1168dae24f66f61e6b04c)
-- KNWToken: [0x508B1890a00BfdB348d1B7D335bE2029B69a5B92](https://blockscout.com/poa/dai/address/0x508B1890a00BfdB348d1B7D335bE2029B69a5B92)
-- KNWVoting: [0x991f901E1Fc151D13ba8C0E27a7f8c6ea3C524Cb](https://blockscout.com/poa/dai/address/0x991f901E1Fc151D13ba8C0E27a7f8c6ea3C524Cb)
+- ditCoordinator: [0x4BB184D45e8e3a6dC6684fda7110894cd6226f16](https://blockscout.com/poa/dai/address/0x4BB184D45e8e3a6dC6684fda7110894cd6226f16)
+- KNWToken: [0x4568b5966bd66ADc5b407d3813eBc1dD37e04217](https://blockscout.com/poa/dai/address/0x4568b5966bd66ADc5b407d3813eBc1dD37e04217)
+- KNWVoting: [0x821bC531E95636d73539d7E9E54f7fB8b5c761eF](https://blockscout.com/poa/dai/address/0x821bC531E95636d73539d7E9E54f7fB8b5c761eF)
 
 ### Demo Contracts
-- ditCoordinator: [0x1dc6f1edd14b0b5d24305a0cfb6d4f0a5de3b4f6](https://blockscout.com/poa/dai/address/0x1dc6f1edd14b0b5d24305a0cfb6d4f0a5de3b4f6)
-- KNWToken: [0x6081aa30758e9D752fd7d8E7729220A80771e835](https://blockscout.com/poa/dai/address/0x6081aa30758e9D752fd7d8E7729220A80771e835)
-- KNWVoting: [0x74F9c8Eeb2F0665858efD038007BbcF08075994D](https://blockscout.com/poa/dai/address/0x74F9c8Eeb2F0665858efD038007BbcF08075994D) 
+- ditCoordinator: [0x9A65c773A216a4F4748B1D65C0fB039d9F2b223D](https://blockscout.com/poa/dai/address/0x9A65c773A216a4F4748B1D65C0fB039d9F2b223D)
+- KNWToken: [0xf1ffDa403dEB83A9891B010C8cE6AEF2e196fdd3](https://blockscout.com/poa/dai/address/0xf1ffDa403dEB83A9891B010C8cE6AEF2e196fdd3)
+- KNWVoting: [0xB872E9eA8E218f5A62fD8572506513f98e2d1445](https://blockscout.com/poa/dai/address/0xB872E9eA8E218f5A62fD8572506513f98e2d1445) 
 
 ## Contract Description
 ### KNWToken
