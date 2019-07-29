@@ -1,5 +1,4 @@
 pragma solidity ^0.5.10;
-//pragma experimental ABIEncoderV2;
 
 import "../libraries/SafeMath.sol";
 
@@ -16,6 +15,10 @@ interface ERC20 {
     function transfer(address _to, uint256 _value) external returns (bool);
     function transferFrom(address _from, address _to, uint256 _value) external returns (bool);
 }
+
+interface KNWTokenContract { 
+    function amountOfIDs() external view returns (uint256 amount);
+} 
 
 /**
  * @title ditCoordinator
@@ -64,6 +67,7 @@ contract ditDemoCoordinator {
     address public manager;
 
     KNWVotingContract KNWVote;
+    KNWTokenContract KNWToken;
     ERC20 xDitToken;
 
     uint256 constant public MIN_VOTE_DURATION = 1*60; // 1 minute
@@ -89,7 +93,10 @@ contract ditDemoCoordinator {
         require(_KNWVotingAddress != address(0) && _KNWTokenAddress != address(0), "KNWVoting and KNWToken address can't be empty");
         KNWVotingAddress = _KNWVotingAddress;
         KNWVote = KNWVotingContract(KNWVotingAddress);
+
         KNWTokenAddress = _KNWTokenAddress;
+        KNWToken = KNWTokenContract(KNWTokenAddress);
+
         xDitTokenAddress = _xDitTokenAddress;
         xDitToken = ERC20(xDitTokenAddress);
 
@@ -149,7 +156,9 @@ contract ditDemoCoordinator {
         require(_knowledgeIDs.length > 0, "Provide at least one knowledge ID");
         require(nextDitCoordinator == address(0), "There is a newer contract deployed");
 
+        uint256 highestID = KNWToken.amountOfIDs();
         for(uint256 i = 0; i < _knowledgeIDs.length; i++) {
+            require(_knowledgeIDs[i] < highestID, "Invalid Knowledge ID");
             allowedKnowledgeIDs[_hash][_knowledgeIDs[i]] = true;
         }
         
@@ -178,8 +187,10 @@ contract ditDemoCoordinator {
         uint256 _currentProposalID = last.getCurrentProposalID(_hash);
         uint256 _votingMajority = last.getVotingMajority(_hash);
         uint256[] memory _knowledgeIDs = last.getKnowledgeIDs(_hash);
+        uint256 highestID = KNWToken.amountOfIDs();
         
         for(uint256 i = 0; i < _knowledgeIDs.length; i++) {
+            require(_knowledgeIDs[i] < highestID, "Invalid Knowledge ID");
             allowedKnowledgeIDs[_hash][_knowledgeIDs[i]] = true;
         }
 

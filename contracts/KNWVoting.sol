@@ -5,10 +5,10 @@ import "./libraries/SafeMath.sol";
 interface KNWTokenContract {
     function balanceOfID(address _address, uint256 _id) external view returns (uint256 balance);
     function freeBalanceOfID(address _address, uint256 _id) external view returns (uint256 freeBalance);
-    function lockTokens(address _account, uint256 _id, uint256 _amount) external returns (bool success);
-    function unlockTokens(address _account, uint256 _id, uint256 _amount) external returns (bool success);
-    function mint(address _account, uint256 _id, uint256 _amount) external returns (bool success);
-    function burn(address _account, uint256 _id, uint256 _amount) external returns (bool success);
+    function lockTokens(address _address, uint256 _id, uint256 _amount) external returns (bool success);
+    function unlockTokens(address _address, uint256 _id, uint256 _amount) external returns (bool success);
+    function mint(address _address, uint256 _id, uint256 _amount) external returns (bool success);
+    function burn(address _address, uint256 _id, uint256 _amount) external returns (bool success);
 }
 
 /**
@@ -68,7 +68,7 @@ contract KNWVoting {
     mapping (bytes32 => ditRepositorySettings) ditRepositories;
 
     // address of the dit Manager
-    address internal manager;
+    address public manager;
 
     // addresses of the last and next contract versions
     address public lastKNWVoting;

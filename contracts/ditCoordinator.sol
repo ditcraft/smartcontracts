@@ -58,13 +58,13 @@ contract ditCoordinator {
     address public lastDitCoordinator;
     address public nextDitCoordinator;
 
-    address internal manager;
+    address public manager;
 
     KNWVotingContract KNWVote;
     KNWTokenContract KNWToken;
 
-    uint256 constant public MIN_VOTE_DURATION = 1*60; // 10 minutes
-    uint256 constant public MAX_VOTE_DURATION = 2*7*24*60*60; // 2 weeks
+    uint256 constant public MIN_VOTE_DURATION = 1*60; // 1 minute
+    uint256 constant public MAX_VOTE_DURATION = 1*7*24*60*60; // 1 week
 
     uint256 constant public MINTING_METHOD = 0;
     uint256 constant public BURNING_METHOD = 0;
