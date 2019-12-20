@@ -282,9 +282,9 @@ contract ditDemoCoordinator {
 
     // Resolving a vote
     // Note: the first caller will automatically resolve the proposal
-    function finalizeVote(bytes32 _repository, uint256 _proposalID) external onlyPassedKYC(msg.sender) returns (bool) {
-        require(!proposalsOfRepository[_repository][_proposalID].participantDetails[msg.sender].hasFinalized, "Each participant can only finalize once");
-        require(proposalsOfRepository[_repository][_proposalID].participantDetails[msg.sender].numberOfVotes > 0 || proposalsOfRepository[_repository][_proposalID].proposer == msg.sender, "Only participants of the vote are able to resolve the vote");
+    function finalizeVote(bytes32 _repository, uint256 _proposalID, address payable _address) external onlyPassedKYC(msg.sender) returns (bool) {
+        require(!proposalsOfRepository[_repository][_proposalID].participantDetails[_address].hasFinalized, "Each participant can only finalize once");
+        require(proposalsOfRepository[_repository][_proposalID].participantDetails[_address].numberOfVotes > 0 || proposalsOfRepository[_repository][_proposalID].proposer == _address, "Only participants of the vote are able to resolve the vote");
 
         // If the proposal hasn't been resolved this will be done by the first caller
         if(!proposalsOfRepository[_repository][_proposalID].isFinalized) {
@@ -295,17 +295,17 @@ contract ditDemoCoordinator {
         }
         
         // The vote contract returns the amount of ETH that the participant will receive
-        (uint256 value, bool votedRight, uint256 numberOfKNW) = KNWVote.finalizeVote(proposalsOfRepository[_repository][_proposalID].KNWVoteID, proposalsOfRepository[_repository][_proposalID].participantDetails[msg.sender].choice, msg.sender);
+        (uint256 value, bool votedRight, uint256 numberOfKNW) = KNWVote.finalizeVote(proposalsOfRepository[_repository][_proposalID].KNWVoteID, proposalsOfRepository[_repository][_proposalID].participantDetails[_address].choice, _address);
         
         // If the value is greater than zero, it will be transferred to the caller
         if(value > 0) {
-            require(xDitToken.transfer(msg.sender, value));
+            require(xDitToken.transfer(_address, value));
         }
         
         proposalsOfRepository[_repository][_proposalID].totalStake = proposalsOfRepository[_repository][_proposalID].totalStake.sub(value);
-        proposalsOfRepository[_repository][_proposalID].participantDetails[msg.sender].hasFinalized = true;
+        proposalsOfRepository[_repository][_proposalID].participantDetails[_address].hasFinalized = true;
      
-        emit FinalizeVote(_repository, _proposalID, msg.sender, proposalsOfRepository[_repository][_proposalID].knowledgeID, votedRight, numberOfKNW);
+        emit FinalizeVote(_repository, _proposalID, _address, proposalsOfRepository[_repository][_proposalID].knowledgeID, votedRight, numberOfKNW);
 
         return true;
     }
